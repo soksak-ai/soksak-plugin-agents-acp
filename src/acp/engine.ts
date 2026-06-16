@@ -102,6 +102,13 @@ export function createAcpEngine(app: any, pluginDir: string) {
       async sessionUpdate(params: acp.SessionNotification): Promise<void> {
         const arr = collectors.get(params.sessionId);
         if (arr) arr.push(params.update);
+        // 스트리밍 — 의존 플러그인(코크핏/라운지)이 `acp.update.<connId>` 구독해 라이브 렌더.
+        // collect(prompt 반환값)와 별개 채널(둘 다: 헤드리스는 반환, UI 는 스트리밍).
+        app.bus?.emit(`acp.update.${id}`, {
+          connId: id,
+          sessionId: params.sessionId,
+          update: params.update,
+        });
       },
       async requestPermission(params: any): Promise<any> {
         // M1 stub — 안전 기본(취소). 실제 정책은 dependent 플러그인(코크핏/라운지)이 M2 에서 결정.
