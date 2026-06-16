@@ -22,8 +22,12 @@ describe("resolveAgent — 에이전트 무관 런처(락인 0)", () => {
       cwd: undefined,
     });
   });
-  it("codex = codex acp", () => {
-    expect(resolveAgent({ agent: "codex" }, DIR)).toEqual({ cmd: "codex", args: ["acp"], cwd: undefined });
+  it("codex = npx @zed-industries/codex-acp (어댑터)", () => {
+    expect(resolveAgent({ agent: "codex" }, DIR)).toEqual({
+      cmd: "npx",
+      args: ["@zed-industries/codex-acp"],
+      cwd: undefined,
+    });
   });
   it("명시 cmd 는 preset 무시(임의 ACP 에이전트)", () => {
     expect(resolveAgent({ cmd: "my-agent", args: ["--serve"], cwd: "/work" }, DIR)).toEqual({

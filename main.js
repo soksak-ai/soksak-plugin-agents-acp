@@ -5144,7 +5144,7 @@ function resolveAgent(opts, pluginDir) {
     mock: { cmd: "node", args: [`${pluginDir}/scripts/mock-acp-agent.mjs`] },
     gemini: { cmd: "gemini", args: ["--acp"] },
     claude: { cmd: "npx", args: ["@zed-industries/claude-code-acp"] },
-    codex: { cmd: "codex", args: ["acp"] }
+    codex: { cmd: "npx", args: ["@zed-industries/codex-acp"] }
   };
   const p = presets[opts.agent ?? ""];
   if (!p) throw new Error(`\uC54C \uC218 \uC5C6\uB294 \uC5D0\uC774\uC804\uD2B8: ${opts.agent} (preset: ${Object.keys(presets).join("/")} \uB610\uB294 cmd \uC9C0\uC815)`);
