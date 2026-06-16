@@ -65,6 +65,8 @@ function makeStream(app: any, handle: number): acp.Stream {
   return acp.ndJsonStream(writable, readable);
 }
 
+type PermissionPolicy = "allow" | "deny" | "ask";
+
 interface Conn {
   id: number;
   handle: number;
@@ -72,6 +74,10 @@ interface Conn {
   collectors: Map<string, any[]>; // sessionId → 진행 중 턴의 session/update 수집
   stderr: string;
   exited: boolean;
+  permission: PermissionPolicy; // 권한 요청 정책(기본 deny — 안전). ask=의존 플러그인이 버스로 결정.
+  queues: Map<string, Promise<unknown>>; // sessionId → 순차 턴 tail(단일 in-flight, claude-gui 규율)
+  deathWaiters: Set<() => void>; // 프로세스 death 시 깨울 in-flight 대기자(무한대기 금지)
+  permSeq: number;
 }
 
 export function createAcpEngine(app: any, pluginDir: string) {
@@ -83,19 +89,40 @@ export function createAcpEngine(app: any, pluginDir: string) {
     cmd?: string;
     args?: string[];
     cwd?: string;
+    permission?: PermissionPolicy;
   }): Promise<{ connId: number }> {
     if (!app.process) throw new Error("process capability 없음(권한 미선언?)");
     const launch = resolveAgent(opts, pluginDir);
     const handle = await app.process.spawn(launch.cmd, launch.args, { cwd: launch.cwd });
     const id = nextId++;
     const collectors = new Map<string, any[]>();
-    const rec: Conn = { id, handle, conn: null as any, collectors, stderr: "", exited: false };
+    const rec: Conn = {
+      id,
+      handle,
+      conn: null as any,
+      collectors,
+      stderr: "",
+      exited: false,
+      permission: opts.permission ?? "deny",
+      queues: new Map(),
+      deathWaiters: new Set(),
+      permSeq: 0,
+    };
     const dec = new TextDecoder();
     app.process.onStderr(handle, (b: Uint8Array) => {
       rec.stderr += dec.decode(b, { stream: true });
     });
     app.process.onExit(handle, () => {
       rec.exited = true;
+      // in-flight 턴 전부 깨운다(무한대기 금지 — claude-gui 규율: 프로세스 death → 즉시 실패 표시).
+      for (const w of rec.deathWaiters) {
+        try {
+          w();
+        } catch {
+          /* noop */
+        }
+      }
+      rec.deathWaiters.clear();
     });
 
     const client: acp.Client = {
@@ -111,8 +138,38 @@ export function createAcpEngine(app: any, pluginDir: string) {
         });
       },
       async requestPermission(params: any): Promise<any> {
-        // M1 stub — 안전 기본(취소). 실제 정책은 dependent 플러그인(코크핏/라운지)이 M2 에서 결정.
-        return { outcome: { outcome: "cancelled" } };
+        // 구조화 권한 — 정규식 모달 감지 불요(ACP 가 구조로 줌). 정책:
+        //  deny(기본·안전): 취소. allow: 첫 allow-류 옵션 선택. ask: 의존 플러그인이 버스로 결정.
+        const opts: any[] = params?.options ?? [];
+        const cancelled = { outcome: { outcome: "cancelled" } };
+        if (rec.permission === "deny") return cancelled;
+        if (rec.permission === "allow") {
+          // allow_once|allow_always 우선, 없으면 첫 옵션. 거부 류는 피한다.
+          const pick =
+            opts.find((o) => /allow|grant|accept|approve/i.test(o.kind ?? o.optionId ?? "")) ??
+            opts.find((o) => !/reject|deny|cancel/i.test(o.kind ?? o.optionId ?? "")) ??
+            opts[0];
+          return pick ? { outcome: { outcome: "selected", optionId: pick.optionId } } : cancelled;
+        }
+        // ask — acp.permission.<connId> 로 요청 emit, 의존 플러그인이 response 채널로 결정. 무응답=거부.
+        const reqId = `${id}-${rec.permSeq++}`;
+        return await new Promise((resolve) => {
+          let settled = false;
+          const finish = (outcome: any) => {
+            if (settled) return;
+            settled = true;
+            off();
+            clearTimeout(timer);
+            resolve(outcome);
+          };
+          const off =
+            app.bus?.on(`acp.permission.response.${id}`, (resp: any) => {
+              if (resp?.reqId === reqId) finish(resp.outcome ?? cancelled);
+            }) ?? (() => {});
+          app.bus?.emit(`acp.permission.${id}`, { connId: id, reqId, request: params });
+          // 안전 기본 — 30초 무응답이면 거부(stuck 권한이 턴을 영구 점유하지 않게).
+          const timer = setTimeout(() => finish(cancelled), 30000);
+        });
       },
       async readTextFile(params: any): Promise<any> {
         if (!app.fs?.readText) throw new Error("fs:read 권한 없음");
@@ -149,23 +206,67 @@ export function createAcpEngine(app: any, pluginDir: string) {
     return { sessionId: r.sessionId };
   }
 
-  async function prompt(
-    connId: number,
+  // 한 턴 실행 — 수집기 설치 → prompt(stuck timeout/death 와 race) → 정리. queue 가 직렬화 보장.
+  async function runTurn(
+    c: Conn,
     sessionId: string,
     text: string,
+    timeoutMs: number,
   ): Promise<{ stopReason: string; updates: any[]; stderr?: string }> {
-    const c = get(connId);
+    if (c.exited) throw new Error("에이전트 종료됨(연결 죽음) — 프롬프트 불가");
     const updates: any[] = [];
     c.collectors.set(sessionId, updates);
     try {
-      const r = await c.conn.prompt({
-        sessionId,
-        prompt: [{ type: "text", text }],
-      } as any);
+      const r = await raceTurn(c, sessionId, text, timeoutMs);
       return { stopReason: r.stopReason, updates, stderr: c.stderr || undefined };
     } finally {
       c.collectors.delete(sessionId);
     }
+  }
+
+  // prompt 응답을 stuck timeout·프로세스 death 와 race. 둘 중 먼저면 취소/실패(무한대기 금지).
+  function raceTurn(c: Conn, sessionId: string, text: string, timeoutMs: number): Promise<any> {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        clearTimeout(timer);
+        c.deathWaiters.delete(onDeath);
+      };
+      const done = (fn: (v: any) => void, v: any) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn(v);
+      };
+      const onDeath = () =>
+        done(reject, new Error("에이전트 종료됨(턴 중 프로세스 death) — in-flight 실패 처리"));
+      c.deathWaiters.add(onDeath);
+      const timer = setTimeout(() => {
+        // stuck — 취소 시도 후 거부. 첫 update/응답이 안 오면 무한대기 대신 실패로.
+        c.conn.cancel({ sessionId } as any).catch(() => {});
+        done(reject, new Error(`응답 지연(stuck) — ${timeoutMs}ms 내 미완료, 취소함`));
+      }, timeoutMs);
+      c.conn.prompt({ sessionId, prompt: [{ type: "text", text }] } as any).then(
+        (v) => done(resolve, v),
+        (e) => done(reject, e),
+      );
+    });
+  }
+
+  async function prompt(
+    connId: number,
+    sessionId: string,
+    text: string,
+    opts?: { timeoutMs?: number },
+  ): Promise<{ stopReason: string; updates: any[]; stderr?: string }> {
+    const c = get(connId);
+    const timeoutMs = opts?.timeoutMs ?? 60000;
+    // 순차 턴 큐 — 같은 세션의 prompt 는 직렬화(단일 in-flight). 이전 턴 tail 완료 후 시작(수집기
+    // 충돌 0, request↔응답 정확 매칭). claude-gui 의 single-injecting 대응.
+    const prev = c.queues.get(sessionId) ?? Promise.resolve();
+    const run = prev.catch(() => {}).then(() => runTurn(c, sessionId, text, timeoutMs));
+    c.queues.set(sessionId, run.catch(() => {}));
+    return run;
   }
 
   async function cancel(connId: number, sessionId: string): Promise<void> {

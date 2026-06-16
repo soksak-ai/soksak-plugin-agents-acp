@@ -102,6 +102,10 @@ export default {
         cmd: { type: "string", description: "명시 실행 명령(preset 대신)" },
         args: { type: "json", description: "명시 인자(string[])" },
         cwd: { type: "string", description: "작업 디렉토리" },
+        permission: {
+          type: "string",
+          description: "권한 정책: deny(기본·안전)|allow|ask(의존 플러그인이 버스로 결정)",
+        },
       },
       async (p) => {
         try {
@@ -125,15 +129,19 @@ export default {
     );
     addAcp(
       "prompt",
-      "프롬프트 전송 — 턴 동안 session/update 수집 후 stopReason 반환",
+      "프롬프트 전송 — 턴 동안 session/update 수집 후 stopReason 반환(순차 큐·stuck timeout·death 보호)",
       {
         connId: { type: "number", required: true },
         sessionId: { type: "string", required: true },
         text: { type: "string", required: true },
+        timeoutMs: { type: "number", description: "stuck 판정 타임아웃(기본 60000)" },
       },
       async (p) => {
         try {
-          return { ok: true, ...(await engine.prompt(p.connId, p.sessionId, p.text)) };
+          return {
+            ok: true,
+            ...(await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })),
+          };
         } catch (e) {
           return { ok: false, error: String(e) };
         }
