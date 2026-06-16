@@ -9,7 +9,8 @@
   "permissions": ["process", "commands", "fs:read", "fs:write"],
   "contributes": {
     "commands": [
-      { "name": "ping", "title": "ACP 코어 적재/버전 확인(E2E)" }
+      { "name": "ping", "title": "ACP 코어 적재/버전 확인(E2E)" },
+      { "name": "exec", "title": "외부 프로그램 실행(process primitive)" }
     ]
   }
 }

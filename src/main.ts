@@ -14,19 +14,74 @@
 export default {
   activate(ctx: any) {
     const app = ctx.app;
-    if (app.commands?.register) {
-      ctx.subscriptions.push(
-        app.commands.register("ping", {
-          description: "ACP 코어 적재/버전 확인(E2E)",
-          handler: async () => ({
-            ok: true,
-            plugin: "soksak-plugin-acp-core",
-            version: "0.1.0",
-            phase: "M0",
-          }),
+    const reg = app.commands?.register;
+    if (!reg) return;
+
+    ctx.subscriptions.push(
+      app.commands.register("ping", {
+        description: "ACP 코어 적재/버전 확인(E2E)",
+        handler: async () => ({
+          ok: true,
+          plugin: "soksak-plugin-acp-core",
+          version: "0.1.0",
+          phase: "M0",
         }),
-      );
-    }
+      }),
+    );
+
+    // 외부 프로그램 실행(범용 primitive) — process capability 위에. ACP 에이전트 런처의 기반이자
+    // 임의 CLI 통합용. stdin 보내고 stdout/stderr/exit 수집. 종료(onExit) 또는 waitMs 안전바운드까지
+    // 수집(이벤트 기반 — 폴링 아님; 비종료 프로그램은 waitMs 후 kill). process 권한 한정.
+    ctx.subscriptions.push(
+      app.commands.register("exec", {
+        description:
+          "외부 프로그램 실행 — stdin 보내고 stdout/stderr/exit 수집(process capability primitive·E2E)",
+        params: {
+          cmd: { type: "string", required: true, description: "실행할 프로그램" },
+          args: { type: "json", description: "인자 배열(string[])" },
+          stdin: { type: "string", description: "표준입력으로 보낼 문자열(생략 가능)" },
+          cwd: { type: "string", description: "작업 디렉토리" },
+          waitMs: { type: "number", description: "수집 최대 대기(ms, 기본 2000)" },
+        },
+        handler: async (p: any) => {
+          const proc = app.process;
+          if (!proc) return { ok: false, error: "process capability 없음(권한 미선언?)" };
+          const args: string[] = Array.isArray(p.args) ? p.args : [];
+          const waitMs: number = typeof p.waitMs === "number" ? p.waitMs : 2000;
+          const dec = new TextDecoder();
+          let out = "";
+          let err = "";
+          let handle: number;
+          try {
+            handle = await proc.spawn(p.cmd, args, { cwd: p.cwd });
+          } catch (e) {
+            return { ok: false, error: `spawn 실패: ${String(e)}` };
+          }
+          proc.onData(handle, (b: Uint8Array) => {
+            out += dec.decode(b, { stream: true });
+          });
+          proc.onStderr(handle, (b: Uint8Array) => {
+            err += dec.decode(b, { stream: true });
+          });
+          if (typeof p.stdin === "string") await proc.write(handle, p.stdin);
+          // 종료 또는 waitMs(안전바운드) — 이벤트(onExit) 기반, 타임아웃은 비종료 프로그램 대비.
+          const exitCode: number | null = await new Promise((resolve) => {
+            let settled = false;
+            const done = (code: number | null) => {
+              if (settled) return;
+              settled = true;
+              resolve(code);
+            };
+            proc.onExit(handle, (code: number) => done(code));
+            setTimeout(() => {
+              proc.kill(handle);
+              done(null);
+            }, waitMs);
+          });
+          return { ok: true, stdout: out, stderr: err, exitCode };
+        },
+      }),
+    );
   },
   deactivate() {},
 };
