@@ -23,15 +23,15 @@ export function resolveAgent(
   if (opts.cmd) return { cmd: opts.cmd, args: opts.args ?? [], cwd: opts.cwd };
   // preset = 편의 launch 문자열일 뿐(락인 0 — 코드는 하나, 차이는 명령뿐). 임의 ACP 에이전트는 cmd 로.
   //  mock: 결정적 테스트 fixture(SDK AgentSideConnection).
-  //  claude: @zed-industries/claude-code-acp — 실 검증됨(initialize→session→prompt→end_turn GREEN).
-  //  gemini: Gemini CLI 의 ACP 모드(gemini --acp).
-  //  codex: 전방 placeholder — codex 0.140 은 ACP 미지원(MCP=`codex mcp-server` 만 노출). codex 가
-  //    ACP 를 추가하면 활성화. 그 전까지 선택 시 명확히 실패(stuck timeout) — 침묵 오작동 아님.
+  //  claude: @zed-industries/claude-code-acp 어댑터 — 실 검증됨(initialize→session→prompt→PONG→end_turn).
+  //  codex: @zed-industries/codex-acp 어댑터 — codex CLI(ChatGPT 인증)를 ACP 로 브리지. claude 와 동일
+  //    패턴(같은 Zed 어댑터 계열). codex 네이티브엔 acp 서브커맨드 없음 — 어댑터가 정답.
+  //  gemini: Gemini CLI 의 네이티브 ACP 모드(gemini --acp).
   const presets: Record<string, { cmd: string; args: string[] }> = {
     mock: { cmd: "node", args: [`${pluginDir}/scripts/mock-acp-agent.mjs`] },
     gemini: { cmd: "gemini", args: ["--acp"] },
     claude: { cmd: "npx", args: ["@zed-industries/claude-code-acp"] },
-    codex: { cmd: "codex", args: ["acp"] },
+    codex: { cmd: "npx", args: ["@zed-industries/codex-acp"] },
   };
   const p = presets[opts.agent ?? ""];
   if (!p) throw new Error(`알 수 없는 에이전트: ${opts.agent} (preset: ${Object.keys(presets).join("/")} 또는 cmd 지정)`);
