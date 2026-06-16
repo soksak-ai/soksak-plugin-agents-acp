@@ -5186,13 +5186,31 @@ function createAcpEngine(app, pluginDir) {
     const handle = await app.process.spawn(launch.cmd, launch.args, { cwd: launch.cwd });
     const id = nextId++;
     const collectors = /* @__PURE__ */ new Map();
-    const rec = { id, handle, conn: null, collectors, stderr: "", exited: false };
+    const rec = {
+      id,
+      handle,
+      conn: null,
+      collectors,
+      stderr: "",
+      exited: false,
+      permission: opts.permission ?? "deny",
+      queues: /* @__PURE__ */ new Map(),
+      deathWaiters: /* @__PURE__ */ new Set(),
+      permSeq: 0
+    };
     const dec = new TextDecoder();
     app.process.onStderr(handle, (b) => {
       rec.stderr += dec.decode(b, { stream: true });
     });
     app.process.onExit(handle, () => {
       rec.exited = true;
+      for (const w of rec.deathWaiters) {
+        try {
+          w();
+        } catch {
+        }
+      }
+      rec.deathWaiters.clear();
     });
     const client = {
       async sessionUpdate(params) {
@@ -5205,7 +5223,30 @@ function createAcpEngine(app, pluginDir) {
         });
       },
       async requestPermission(params) {
-        return { outcome: { outcome: "cancelled" } };
+        const opts2 = params?.options ?? [];
+        const cancelled = { outcome: { outcome: "cancelled" } };
+        if (rec.permission === "deny") return cancelled;
+        if (rec.permission === "allow") {
+          const pick = opts2.find((o) => /allow|grant|accept|approve/i.test(o.kind ?? o.optionId ?? "")) ?? opts2.find((o) => !/reject|deny|cancel/i.test(o.kind ?? o.optionId ?? "")) ?? opts2[0];
+          return pick ? { outcome: { outcome: "selected", optionId: pick.optionId } } : cancelled;
+        }
+        const reqId = `${id}-${rec.permSeq++}`;
+        return await new Promise((resolve) => {
+          let settled = false;
+          const finish = (outcome) => {
+            if (settled) return;
+            settled = true;
+            off();
+            clearTimeout(timer);
+            resolve(outcome);
+          };
+          const off = app.bus?.on(`acp.permission.response.${id}`, (resp) => {
+            if (resp?.reqId === reqId) finish(resp.outcome ?? cancelled);
+          }) ?? (() => {
+          });
+          app.bus?.emit(`acp.permission.${id}`, { connId: id, reqId, request: params });
+          const timer = setTimeout(() => finish(cancelled), 3e4);
+        });
       },
       async readTextFile(params) {
         if (!app.fs?.readText) throw new Error("fs:read \uAD8C\uD55C \uC5C6\uC74C");
@@ -5238,19 +5279,52 @@ function createAcpEngine(app, pluginDir) {
     const r = await c.conn.newSession({ cwd: cwd ?? "/", mcpServers: [] });
     return { sessionId: r.sessionId };
   }
-  async function prompt(connId, sessionId, text) {
-    const c = get(connId);
+  async function runTurn(c, sessionId, text, timeoutMs) {
+    if (c.exited) throw new Error("\uC5D0\uC774\uC804\uD2B8 \uC885\uB8CC\uB428(\uC5F0\uACB0 \uC8FD\uC74C) \u2014 \uD504\uB86C\uD504\uD2B8 \uBD88\uAC00");
     const updates = [];
     c.collectors.set(sessionId, updates);
     try {
-      const r = await c.conn.prompt({
-        sessionId,
-        prompt: [{ type: "text", text }]
-      });
+      const r = await raceTurn(c, sessionId, text, timeoutMs);
       return { stopReason: r.stopReason, updates, stderr: c.stderr || void 0 };
     } finally {
       c.collectors.delete(sessionId);
     }
+  }
+  function raceTurn(c, sessionId, text, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        clearTimeout(timer);
+        c.deathWaiters.delete(onDeath);
+      };
+      const done = (fn, v) => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        fn(v);
+      };
+      const onDeath = () => done(reject, new Error("\uC5D0\uC774\uC804\uD2B8 \uC885\uB8CC\uB428(\uD134 \uC911 \uD504\uB85C\uC138\uC2A4 death) \u2014 in-flight \uC2E4\uD328 \uCC98\uB9AC"));
+      c.deathWaiters.add(onDeath);
+      const timer = setTimeout(() => {
+        c.conn.cancel({ sessionId }).catch(() => {
+        });
+        done(reject, new Error(`\uC751\uB2F5 \uC9C0\uC5F0(stuck) \u2014 ${timeoutMs}ms \uB0B4 \uBBF8\uC644\uB8CC, \uCDE8\uC18C\uD568`));
+      }, timeoutMs);
+      c.conn.prompt({ sessionId, prompt: [{ type: "text", text }] }).then(
+        (v) => done(resolve, v),
+        (e) => done(reject, e)
+      );
+    });
+  }
+  async function prompt(connId, sessionId, text, opts) {
+    const c = get(connId);
+    const timeoutMs = opts?.timeoutMs ?? 6e4;
+    const prev = c.queues.get(sessionId) ?? Promise.resolve();
+    const run = prev.catch(() => {
+    }).then(() => runTurn(c, sessionId, text, timeoutMs));
+    c.queues.set(sessionId, run.catch(() => {
+    }));
+    return run;
   }
   async function cancel(connId, sessionId) {
     const c = get(connId);
@@ -5345,7 +5419,11 @@ var main_default = {
         agent: { type: "string", description: "preset: mock|gemini|claude|codex" },
         cmd: { type: "string", description: "\uBA85\uC2DC \uC2E4\uD589 \uBA85\uB839(preset \uB300\uC2E0)" },
         args: { type: "json", description: "\uBA85\uC2DC \uC778\uC790(string[])" },
-        cwd: { type: "string", description: "\uC791\uC5C5 \uB514\uB809\uD1A0\uB9AC" }
+        cwd: { type: "string", description: "\uC791\uC5C5 \uB514\uB809\uD1A0\uB9AC" },
+        permission: {
+          type: "string",
+          description: "\uAD8C\uD55C \uC815\uCC45: deny(\uAE30\uBCF8\xB7\uC548\uC804)|allow|ask(\uC758\uC874 \uD50C\uB7EC\uADF8\uC778\uC774 \uBC84\uC2A4\uB85C \uACB0\uC815)"
+        }
       },
       async (p) => {
         try {
@@ -5369,15 +5447,19 @@ var main_default = {
     );
     addAcp(
       "prompt",
-      "\uD504\uB86C\uD504\uD2B8 \uC804\uC1A1 \u2014 \uD134 \uB3D9\uC548 session/update \uC218\uC9D1 \uD6C4 stopReason \uBC18\uD658",
+      "\uD504\uB86C\uD504\uD2B8 \uC804\uC1A1 \u2014 \uD134 \uB3D9\uC548 session/update \uC218\uC9D1 \uD6C4 stopReason \uBC18\uD658(\uC21C\uCC28 \uD050\xB7stuck timeout\xB7death \uBCF4\uD638)",
       {
         connId: { type: "number", required: true },
         sessionId: { type: "string", required: true },
-        text: { type: "string", required: true }
+        text: { type: "string", required: true },
+        timeoutMs: { type: "number", description: "stuck \uD310\uC815 \uD0C0\uC784\uC544\uC6C3(\uAE30\uBCF8 60000)" }
       },
       async (p) => {
         try {
-          return { ok: true, ...await engine.prompt(p.connId, p.sessionId, p.text) };
+          return {
+            ok: true,
+            ...await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })
+          };
         } catch (e) {
           return { ok: false, error: String(e) };
         }

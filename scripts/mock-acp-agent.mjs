@@ -48,6 +48,45 @@ const agent = {
       }
     }
 
+    // (옵션) 권한 브리지 검증 — "askperm" 이면 client(엔진)에 권한 요청, 결과를 보고.
+    if (/askperm/.test(userText) && conn.requestPermission) {
+      try {
+        const r = await conn.requestPermission({
+          sessionId,
+          toolCall: { toolCallId: "perm-1", title: "민감 작업(파일 쓰기)", kind: "edit" },
+          options: [
+            { optionId: "allow", name: "허용", kind: "allow_once" },
+            { optionId: "reject", name: "거부", kind: "reject_once" },
+          ],
+        });
+        const out =
+          r && r.outcome && r.outcome.outcome === "selected"
+            ? `granted:${r.outcome.optionId}`
+            : "denied";
+        await conn.sessionUpdate({
+          sessionId,
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: `permission:${out}` } },
+        });
+      } catch (e) {
+        await conn.sessionUpdate({
+          sessionId,
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: `permission-error:${String(e)}` } },
+        });
+      }
+      return { stopReason: "end_turn" };
+    }
+
+    // (옵션) stuck 검증 — "hang" 이면 영원히 응답하지 않는다(엔진 stuck timeout 이 취소/실패시킬 때까지).
+    if (/hang/.test(userText)) {
+      await new Promise(() => {});
+    }
+
+    // (옵션) death 검증 — "exitnow" 이면 턴 중 프로세스 종료(엔진 in-flight 즉시 실패 처리 확인).
+    if (/exitnow/.test(userText)) {
+      setTimeout(() => process.exit(0), 50);
+      await new Promise(() => {});
+    }
+
     // 메시지 청크
     await conn.sessionUpdate({
       sessionId,
