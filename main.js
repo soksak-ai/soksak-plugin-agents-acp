@@ -5199,6 +5199,7 @@ function createAcpEngine(app, pluginDir) {
       permission: opts.permission ?? "deny",
       queues: /* @__PURE__ */ new Map(),
       deathWaiters: /* @__PURE__ */ new Set(),
+      activityBumps: /* @__PURE__ */ new Map(),
       permSeq: 0
     };
     const dec = new TextDecoder();
@@ -5219,6 +5220,7 @@ function createAcpEngine(app, pluginDir) {
       async sessionUpdate(params) {
         const arr = collectors.get(params.sessionId);
         if (arr) arr.push(params.update);
+        rec.activityBumps.get(params.sessionId)?.();
         app.bus?.emit(`acp.update.${id}`, {
           connId: id,
           sessionId: params.sessionId,
@@ -5293,12 +5295,23 @@ function createAcpEngine(app, pluginDir) {
       c.collectors.delete(sessionId);
     }
   }
-  function raceTurn(c, sessionId, text, timeoutMs) {
+  function raceTurn(c, sessionId, text, idleMs) {
     return new Promise((resolve, reject) => {
       let settled = false;
+      let timer;
+      const onIdle = () => {
+        c.conn.cancel({ sessionId }).catch(() => {
+        });
+        done(reject, new Error(`\uC751\uB2F5 \uC9C0\uC5F0(stuck) \u2014 ${idleMs}ms \uB3D9\uC548 \uC9C4\uD589 \uC5C6\uC74C, \uCDE8\uC18C\uD568`));
+      };
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(onIdle, idleMs);
+      };
       const cleanup = () => {
         clearTimeout(timer);
         c.deathWaiters.delete(onDeath);
+        c.activityBumps.delete(sessionId);
       };
       const done = (fn, v) => {
         if (settled) return;
@@ -5308,11 +5321,8 @@ function createAcpEngine(app, pluginDir) {
       };
       const onDeath = () => done(reject, new Error("\uC5D0\uC774\uC804\uD2B8 \uC885\uB8CC\uB428(\uD134 \uC911 \uD504\uB85C\uC138\uC2A4 death) \u2014 in-flight \uC2E4\uD328 \uCC98\uB9AC"));
       c.deathWaiters.add(onDeath);
-      const timer = setTimeout(() => {
-        c.conn.cancel({ sessionId }).catch(() => {
-        });
-        done(reject, new Error(`\uC751\uB2F5 \uC9C0\uC5F0(stuck) \u2014 ${timeoutMs}ms \uB0B4 \uBBF8\uC644\uB8CC, \uCDE8\uC18C\uD568`));
-      }, timeoutMs);
+      c.activityBumps.set(sessionId, arm);
+      arm();
       c.conn.prompt({ sessionId, prompt: [{ type: "text", text }] }).then(
         (v) => done(resolve, v),
         (e) => done(reject, e)
@@ -5321,10 +5331,10 @@ function createAcpEngine(app, pluginDir) {
   }
   async function prompt(connId, sessionId, text, opts) {
     const c = get(connId);
-    const timeoutMs = opts?.timeoutMs ?? 6e4;
+    const idleMs = opts?.timeoutMs ?? 12e4;
     const prev = c.queues.get(sessionId) ?? Promise.resolve();
     const run = prev.catch(() => {
-    }).then(() => runTurn(c, sessionId, text, timeoutMs));
+    }).then(() => runTurn(c, sessionId, text, idleMs));
     c.queues.set(sessionId, run.catch(() => {
     }));
     return run;

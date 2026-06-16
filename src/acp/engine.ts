@@ -83,6 +83,9 @@ interface Conn {
   permission: PermissionPolicy; // 권한 요청 정책(기본 deny — 안전). ask=의존 플러그인이 버스로 결정.
   queues: Map<string, Promise<unknown>>; // sessionId → 순차 턴 tail(단일 in-flight, claude-gui 규율)
   deathWaiters: Set<() => void>; // 프로세스 death 시 깨울 in-flight 대기자(무한대기 금지)
+  // sessionId → "활동 있었음" 신호(session/update 도착마다 호출). raceTurn 이 무활동 타이머를 리셋한다
+  // — stuck = 진행 증거 없음(무활동)이지, 긴 턴이 아니다. 활발히 스트리밍하는 턴은 안 끊긴다.
+  activityBumps: Map<string, () => void>;
   permSeq: number;
 }
 
@@ -118,6 +121,7 @@ export function createAcpEngine(app: any, pluginDir: string) {
       permission: opts.permission ?? "deny",
       queues: new Map(),
       deathWaiters: new Set(),
+      activityBumps: new Map(),
       permSeq: 0,
     };
     const dec = new TextDecoder();
@@ -141,6 +145,8 @@ export function createAcpEngine(app: any, pluginDir: string) {
       async sessionUpdate(params: acp.SessionNotification): Promise<void> {
         const arr = collectors.get(params.sessionId);
         if (arr) arr.push(params.update);
+        // 진행 증거 도착 — 이 세션의 무활동 타이머 리셋(활발한 턴은 stuck 으로 안 끊긴다).
+        rec.activityBumps.get(params.sessionId)?.();
         // 스트리밍 — 의존 플러그인(코크핏/라운지)이 `acp.update.<connId>` 구독해 라이브 렌더.
         // collect(prompt 반환값)와 별개 채널(둘 다: 헤드리스는 반환, UI 는 스트리밍).
         app.bus?.emit(`acp.update.${id}`, {
@@ -236,13 +242,25 @@ export function createAcpEngine(app: any, pluginDir: string) {
     }
   }
 
-  // prompt 응답을 stuck timeout·프로세스 death 와 race. 둘 중 먼저면 취소/실패(무한대기 금지).
-  function raceTurn(c: Conn, sessionId: string, text: string, timeoutMs: number): Promise<any> {
+  // prompt 응답을 무활동(stuck) 타이머·프로세스 death 와 race. idleMs 동안 session/update 가 하나도
+  // 안 오면 stuck(취소+실패). update 가 오면 타이머 리셋 — 길게 스트리밍하는 정상 턴은 안 끊긴다.
+  function raceTurn(c: Conn, sessionId: string, text: string, idleMs: number): Promise<any> {
     return new Promise((resolve, reject) => {
       let settled = false;
+      let timer: ReturnType<typeof setTimeout>;
+      const onIdle = () => {
+        // 무활동 = 진행 증거 없음 → stuck. 취소 시도 후 거부(무한대기 금지).
+        c.conn.cancel({ sessionId } as any).catch(() => {});
+        done(reject, new Error(`응답 지연(stuck) — ${idleMs}ms 동안 진행 없음, 취소함`));
+      };
+      const arm = () => {
+        clearTimeout(timer);
+        timer = setTimeout(onIdle, idleMs);
+      };
       const cleanup = () => {
         clearTimeout(timer);
         c.deathWaiters.delete(onDeath);
+        c.activityBumps.delete(sessionId);
       };
       const done = (fn: (v: any) => void, v: any) => {
         if (settled) return;
@@ -253,11 +271,8 @@ export function createAcpEngine(app: any, pluginDir: string) {
       const onDeath = () =>
         done(reject, new Error("에이전트 종료됨(턴 중 프로세스 death) — in-flight 실패 처리"));
       c.deathWaiters.add(onDeath);
-      const timer = setTimeout(() => {
-        // stuck — 취소 시도 후 거부. 첫 update/응답이 안 오면 무한대기 대신 실패로.
-        c.conn.cancel({ sessionId } as any).catch(() => {});
-        done(reject, new Error(`응답 지연(stuck) — ${timeoutMs}ms 내 미완료, 취소함`));
-      }, timeoutMs);
+      c.activityBumps.set(sessionId, arm); // session/update 마다 호출 → 타이머 리셋
+      arm(); // 첫 토큰까지의 대기도 idleMs 만큼 허용
       c.conn.prompt({ sessionId, prompt: [{ type: "text", text }] } as any).then(
         (v) => done(resolve, v),
         (e) => done(reject, e),
@@ -272,11 +287,13 @@ export function createAcpEngine(app: any, pluginDir: string) {
     opts?: { timeoutMs?: number },
   ): Promise<{ stopReason: string; updates: any[]; stderr?: string }> {
     const c = get(connId);
-    const timeoutMs = opts?.timeoutMs ?? 60000;
+    // timeoutMs = 무활동(stuck) 한도. 첫 토큰까지의 think 시간 + 청크 사이 간격에 적용(턴 전체 아님).
+    // 기본 120s 침묵 = stuck. 활발히 스트리밍하면 매 update 마다 리셋되어 안 끊긴다.
+    const idleMs = opts?.timeoutMs ?? 120000;
     // 순차 턴 큐 — 같은 세션의 prompt 는 직렬화(단일 in-flight). 이전 턴 tail 완료 후 시작(수집기
     // 충돌 0, request↔응답 정확 매칭). claude-gui 의 single-injecting 대응.
     const prev = c.queues.get(sessionId) ?? Promise.resolve();
-    const run = prev.catch(() => {}).then(() => runTurn(c, sessionId, text, timeoutMs));
+    const run = prev.catch(() => {}).then(() => runTurn(c, sessionId, text, idleMs));
     c.queues.set(sessionId, run.catch(() => {}));
     return run;
   }

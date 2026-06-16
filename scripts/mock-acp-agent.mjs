@@ -87,6 +87,19 @@ const agent = {
       await new Promise(() => {});
     }
 
+    // (옵션) 무활동-리셋 검증 — "slowstream" 이면 청크를 간격 두고 여러 번. 각 간격이 idle 한도보다
+    // 짧으면(활동 리셋) 총 시간이 한도보다 길어도 stuck 아니어야 한다(긴 정상 스트리밍).
+    if (/slowstream/.test(userText)) {
+      for (let i = 1; i <= 5; i++) {
+        await new Promise((r) => setTimeout(r, 700));
+        await conn.sessionUpdate({
+          sessionId,
+          update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: `chunk${i} ` } },
+        });
+      }
+      return { stopReason: "end_turn" };
+    }
+
     // 메시지 청크
     await conn.sessionUpdate({
       sessionId,
