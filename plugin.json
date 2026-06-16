@@ -10,7 +10,13 @@
   "contributes": {
     "commands": [
       { "name": "ping", "title": "ACP 코어 적재/버전 확인(E2E)" },
-      { "name": "exec", "title": "외부 프로그램 실행(process primitive)" }
+      { "name": "exec", "title": "외부 프로그램 실행(process primitive)" },
+      { "name": "connect", "title": "ACP 에이전트 연결" },
+      { "name": "session-new", "title": "새 ACP 세션" },
+      { "name": "prompt", "title": "프롬프트 전송" },
+      { "name": "cancel", "title": "턴 취소" },
+      { "name": "disconnect", "title": "연결 종료" },
+      { "name": "connections", "title": "활성 연결 목록" }
     ]
   }
 }
