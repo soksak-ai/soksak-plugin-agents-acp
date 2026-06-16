@@ -9,7 +9,9 @@
 // 견고함 규율(claude-gui 계승): 전송≠수신(증거 전 인디케이터)·순차 턴 큐·stuck·NDJSON partial-frame
 //   버퍼링·no-fake-progress·remount 생존. 깨지기 쉬운 정규식 스크래핑 대신 ACP 구조화 신호로 구현.
 //
-// [M0 스캐폴드] 적재/버전 확인 ping 만. ACP SDK 통합·멀티세션 채널·humanizer 는 다음 이정표.
+// [M1] ACP 엔진(connect/session/prompt) 추가. 멀티세션 채널·견고함 규율·humanizer 는 다음 이정표.
+
+import { createAcpEngine } from "./acp/engine";
 
 export default {
   activate(ctx: any) {
@@ -82,6 +84,87 @@ export default {
         },
       }),
     );
+
+    // ── ACP 엔진 — process capability 위에 ACP 클라이언트(어떤 ACP 에이전트든). 락인 0. ──
+    const engine = createAcpEngine(app, ctx.dir);
+    const addAcp = (
+      name: string,
+      description: string,
+      params: any,
+      handler: (p: any) => Promise<any>,
+    ) => ctx.subscriptions.push(app.commands.register(name, { description, params, handler }));
+
+    addAcp(
+      "connect",
+      "ACP 에이전트 연결(spawn + initialize 핸드셰이크) → connId. agent preset(mock/gemini/claude/codex) 또는 cmd 지정",
+      {
+        agent: { type: "string", description: "preset: mock|gemini|claude|codex" },
+        cmd: { type: "string", description: "명시 실행 명령(preset 대신)" },
+        args: { type: "json", description: "명시 인자(string[])" },
+        cwd: { type: "string", description: "작업 디렉토리" },
+      },
+      async (p) => {
+        try {
+          return { ok: true, ...(await engine.connect(p)) };
+        } catch (e) {
+          return { ok: false, error: String(e) };
+        }
+      },
+    );
+    addAcp(
+      "session-new",
+      "새 ACP 세션 → sessionId",
+      { connId: { type: "number", required: true }, cwd: { type: "string" } },
+      async (p) => {
+        try {
+          return { ok: true, ...(await engine.sessionNew(p.connId, p.cwd)) };
+        } catch (e) {
+          return { ok: false, error: String(e) };
+        }
+      },
+    );
+    addAcp(
+      "prompt",
+      "프롬프트 전송 — 턴 동안 session/update 수집 후 stopReason 반환",
+      {
+        connId: { type: "number", required: true },
+        sessionId: { type: "string", required: true },
+        text: { type: "string", required: true },
+      },
+      async (p) => {
+        try {
+          return { ok: true, ...(await engine.prompt(p.connId, p.sessionId, p.text)) };
+        } catch (e) {
+          return { ok: false, error: String(e) };
+        }
+      },
+    );
+    addAcp(
+      "cancel",
+      "진행 중 턴 취소(session/cancel)",
+      { connId: { type: "number", required: true }, sessionId: { type: "string", required: true } },
+      async (p) => {
+        try {
+          await engine.cancel(p.connId, p.sessionId);
+          return { ok: true };
+        } catch (e) {
+          return { ok: false, error: String(e) };
+        }
+      },
+    );
+    addAcp(
+      "disconnect",
+      "연결 종료(에이전트 kill)",
+      { connId: { type: "number", required: true } },
+      async (p) => {
+        await engine.disconnect(p.connId);
+        return { ok: true };
+      },
+    );
+    addAcp("connections", "활성 연결 목록", {}, async () => ({
+      ok: true,
+      connections: engine.list(),
+    }));
   },
   deactivate() {},
 };
