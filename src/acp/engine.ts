@@ -93,7 +93,13 @@ export function createAcpEngine(app: any, pluginDir: string) {
   }): Promise<{ connId: number }> {
     if (!app.process) throw new Error("process capability 없음(권한 미선언?)");
     const launch = resolveAgent(opts, pluginDir);
-    const handle = await app.process.spawn(launch.cmd, launch.args, { cwd: launch.cwd });
+    // ACP 자식 에이전트 = 에디터가 띄운 독립 세션. 호스트의 Claude Code 중첩 가드(CLAUDECODE 등)를
+    // 떼어내 claude 어댑터가 "nested session" 으로 오인해 막히지 않게 한다(soksak 을 Claude Code 안에서
+    // 띄운 경우 대비). 타 에이전트(gemini/codex/…)엔 무해 — 해당 키를 안 쓰므로.
+    const handle = await app.process.spawn(launch.cmd, launch.args, {
+      cwd: launch.cwd,
+      envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"],
+    });
     const id = nextId++;
     const collectors = new Map<string, any[]>();
     const rec: Conn = {
