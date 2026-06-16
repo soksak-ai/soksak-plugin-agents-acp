@@ -5183,7 +5183,10 @@ function createAcpEngine(app, pluginDir) {
   async function connect(opts) {
     if (!app.process) throw new Error("process capability \uC5C6\uC74C(\uAD8C\uD55C \uBBF8\uC120\uC5B8?)");
     const launch = resolveAgent(opts, pluginDir);
-    const handle = await app.process.spawn(launch.cmd, launch.args, { cwd: launch.cwd });
+    const handle = await app.process.spawn(launch.cmd, launch.args, {
+      cwd: launch.cwd,
+      envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
+    });
     const id = nextId++;
     const collectors = /* @__PURE__ */ new Map();
     const rec = {
