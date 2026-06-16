@@ -5198,6 +5198,11 @@ function createAcpEngine(app, pluginDir) {
       async sessionUpdate(params) {
         const arr = collectors.get(params.sessionId);
         if (arr) arr.push(params.update);
+        app.bus?.emit(`acp.update.${id}`, {
+          connId: id,
+          sessionId: params.sessionId,
+          update: params.update
+        });
       },
       async requestPermission(params) {
         return { outcome: { outcome: "cancelled" } };
