@@ -1,0 +1,23 @@
+{
+  "spec": "soksak-spec-plugin@0.0.1",
+  "id": "soksak-plugin-acp-core",
+  "name": "ACP Core",
+  "version": "0.0.1",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-acp-core.git",
+  "description": "Agent Client Protocol 클라이언트 엔진(라이브러리) — 어떤 ACP 에이전트(Gemini·Claude·Codex…)든 서브프로세스로 띄워 구조화 통신. 코크핏·라운지가 의존. 락인 0(ACP 표준만).",
+  "entry": "main.js",
+  "permissions": [
+    "process",
+    "commands",
+    "fs:read",
+    "fs:write"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "name": "ping",
+        "title": "ACP 코어 적재/버전 확인(E2E)"
+      }
+    ]
+  }
+}
