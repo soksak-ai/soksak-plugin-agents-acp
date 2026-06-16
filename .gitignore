@@ -1,0 +1,8 @@
+node_modules
+dist
+*.log
+.DS_Store
+# main.js 는 배포 entry라 추적(번들 플러그인은 설치=clone+entry, 빌드스텝 0).
+
+# local-only working notes (never committed)
+secret/
