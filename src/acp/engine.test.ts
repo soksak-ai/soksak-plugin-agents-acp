@@ -1,7 +1,31 @@
 // 에이전트-agnostic 런처 계약 고정 — preset(gemini/claude/codex)은 force-install 된 글로벌 bin 절대경로,
 // npmBinDir 미해소 시 npx 폴백, 명시 cmd 우선. mock 은 preset 아님(테스트 fixture 는 명시 cmd 로). 락인 0 증명.
 import { describe, it, expect } from "vitest";
-import { resolveAgent } from "./engine";
+import { resolveAgent, assistantText } from "./engine";
+
+// agent_message_chunk 조립 — 델타 + 최종 완결 재전송 dedup(2배 중복 방지). canonical 재주입의 클린 전제.
+const chunk = (text: string) => ({ sessionUpdate: "agent_message_chunk", content: { text } });
+const usage = { sessionUpdate: "usage_update" };
+
+describe("assistantText — 델타 조립 + 최종 완결 재전송 dedup", () => {
+  it("델타 스트림 + 최종 완결 재전송 → 2배 아님(claude 어댑터 패턴)", () => {
+    // [""] "H" "ELLO" "HELLO" — 마지막이 누적 전체("HELLO")와 동일 → 제거
+    expect(assistantText([usage, chunk(""), chunk("H"), chunk("ELLO"), chunk("HELLO"), usage])).toBe("HELLO");
+  });
+  it("델타만(최종 재전송 없음) → 그대로 이음", () => {
+    expect(assistantText([chunk("H"), chunk("ELLO")])).toBe("HELLO");
+  });
+  it("완결본 1개만 → 그대로", () => {
+    expect(assistantText([chunk("HELLO")])).toBe("HELLO");
+  });
+  it("마지막이 누적과 다르면 보존(정상 델타 — 오인 제거 금지)", () => {
+    expect(assistantText([chunk("AB"), chunk("CD")])).toBe("ABCD");
+  });
+  it("청크 없음 → 빈 문자열, 비-chunk update 무시", () => {
+    expect(assistantText([usage, usage])).toBe("");
+    expect(assistantText([])).toBe("");
+  });
+});
 
 const DIR = "/plugins/acp-core";
 const BIN = "/np/bin"; // 가짜 npm 글로벌 bin 디렉터리

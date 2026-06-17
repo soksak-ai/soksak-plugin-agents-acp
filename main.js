@@ -13680,6 +13680,15 @@ function makeStream(app, handle) {
   });
   return ndJsonStream(writable, readable);
 }
+function assistantText(updates) {
+  const chunks = (updates ?? []).filter((u) => u?.sessionUpdate === "agent_message_chunk").map((u) => u?.content?.text ?? "");
+  if (chunks.length >= 2) {
+    const last = chunks[chunks.length - 1];
+    const prior = chunks.slice(0, -1).join("");
+    if (last !== "" && last === prior) chunks.pop();
+  }
+  return chunks.join("");
+}
 function createAcpEngine(app, pluginDir) {
   const connections = /* @__PURE__ */ new Map();
   let nextId = 1;
@@ -13801,7 +13810,12 @@ function createAcpEngine(app, pluginDir) {
     c.collectors.set(sessionId, updates);
     try {
       const r = await raceTurn(c, sessionId, text, timeoutMs);
-      return { stopReason: r.stopReason, updates, stderr: c.stderr || void 0 };
+      return {
+        stopReason: r.stopReason,
+        updates,
+        text: assistantText(updates),
+        stderr: c.stderr || void 0
+      };
     } finally {
       c.collectors.delete(sessionId);
     }
