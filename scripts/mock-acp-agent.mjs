@@ -3,7 +3,7 @@
 // acp-core 엔진의 핸드셰이크·prompt·session/update 경로를 실 에이전트 없이 RED→GREEN 검증한다.
 // 동작: initialize → newSession → prompt 시 agent_message_chunk + tool_call(pending→completed) 를
 // emit 하고 end_turn. 프롬프트에 "readfile:<path>" 가 있으면 client 의 fs/read 를 호출(브리지 검증).
-import * as acp from "@zed-industries/agent-client-protocol";
+import * as acp from "@agentclientprotocol/sdk";
 import { Writable, Readable } from "node:stream";
 
 const stream = acp.ndJsonStream(
