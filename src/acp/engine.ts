@@ -218,10 +218,24 @@ export function createAcpEngine(app: any, pluginDir: string) {
     return c;
   }
 
-  async function sessionNew(connId: number, cwd?: string): Promise<{ sessionId: string }> {
+  async function sessionNew(
+    connId: number,
+    cwd?: string,
+    model?: string,
+  ): Promise<{ sessionId: string; models: any; modes: any }> {
     const c = get(connId);
-    const r = await c.conn.newSession({ cwd: cwd ?? "/", mcpServers: [] } as any);
-    return { sessionId: r.sessionId };
+    const r: any = await c.conn.newSession({ cwd: cwd ?? "/", mcpServers: [] } as any);
+    const sessionId = r.sessionId;
+    // 모델 지정 시 설정(claude: default/sonnet/haiku 등). 어댑터가 setSessionModel 지원할 때만, 실패는 무시.
+    if (model && typeof (c.conn as any).setSessionModel === "function") {
+      try {
+        await (c.conn as any).setSessionModel({ sessionId, modelId: model });
+      } catch {
+        /* 미지원/실패 — 어댑터 기본 모델 유지 */
+      }
+    }
+    // 새 세션이 노출하는 availableModels/modes 동봉 — 의존 플러그인이 모델 선택 UI 를 채운다.
+    return { sessionId, models: r.models ?? null, modes: r.modes ?? null };
   }
 
   // 한 턴 실행 — 수집기 설치 → prompt(stuck timeout/death 와 race) → 정리. queue 가 직렬화 보장.
