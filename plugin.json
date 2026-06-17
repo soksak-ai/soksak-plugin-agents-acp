@@ -7,6 +7,38 @@
   "description": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다.",
   "entry": "main.js",
   "permissions": ["process", "commands", "fs:read", "fs:write"],
+  "libraries": [
+    {
+      "name": "@agentclientprotocol/claude-agent-acp",
+      "bin": "claude-agent-acp",
+      "label": "Claude ACP 어댑터",
+      "install": {
+        "darwin": "npm i -g @agentclientprotocol/claude-agent-acp@latest",
+        "linux": "npm i -g @agentclientprotocol/claude-agent-acp@latest",
+        "win32": "npm i -g @agentclientprotocol/claude-agent-acp@latest"
+      }
+    },
+    {
+      "name": "@agentclientprotocol/codex-acp",
+      "bin": "codex-acp",
+      "label": "Codex ACP 어댑터",
+      "install": {
+        "darwin": "npm i -g @agentclientprotocol/codex-acp@latest",
+        "linux": "npm i -g @agentclientprotocol/codex-acp@latest",
+        "win32": "npm i -g @agentclientprotocol/codex-acp@latest"
+      }
+    },
+    {
+      "name": "@google/gemini-cli",
+      "bin": "gemini",
+      "label": "Gemini CLI",
+      "install": {
+        "darwin": "npm i -g @google/gemini-cli@latest",
+        "linux": "npm i -g @google/gemini-cli@latest",
+        "win32": "npm i -g @google/gemini-cli@latest"
+      }
+    }
+  ],
   "contributes": {
     "commands": [
       { "name": "ping", "title": "ACP 코어 적재/버전 확인(E2E)" },

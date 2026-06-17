@@ -15,29 +15,59 @@ export interface AgentLaunch {
   cwd?: string;
 }
 
-// agnostic 런처 — preset 또는 명시 cmd/args. preset 은 launch 명령만 다르고 코드는 하나(락인 0).
+// preset = 에이전트 CLI(매니페스트 libraries 로 선언·강제 설치되는 그 bin). 코드는 하나, 차이는 launch 명령뿐(락인 0).
+//  claude: @agentclientprotocol/claude-agent-acp — 공식 CLI 가 ACP 미지원이라 어댑터로 브리지(최신 모델 Opus 4.8).
+//  codex:  @agentclientprotocol/codex-acp — codex CLI(ChatGPT 인증)를 ACP 로 브리지.
+//  gemini: @google/gemini-cli — 구글 공식 CLI 가 ACP 네이티브 지원(--acp), 어댑터 불요.
+// bin 은 라이브러리 종속성으로 강제 설치된다(plugin.json libraries) → npm 글로벌 bin 절대경로로 실행(PATH 무관).
+const PRESETS: Record<string, { bin: string; args: string[]; pkg: string }> = {
+  gemini: { bin: "gemini", args: ["--acp"], pkg: "@google/gemini-cli@latest" },
+  claude: { bin: "claude-agent-acp", args: [], pkg: "@agentclientprotocol/claude-agent-acp@latest" },
+  codex: { bin: "codex-acp", args: [], pkg: "@agentclientprotocol/codex-acp@latest" },
+};
+
+// agnostic 런처 — preset 또는 명시 cmd/args. 코드는 하나, 차이는 명령뿐(락인 0).
+// npmBinDir 주어지면 force-install 된 글로벌 bin 을 절대경로로 실행(PATH 무관·lazy 0). 미해소면 npx 폴백.
 export function resolveAgent(
   opts: { agent?: string; cmd?: string; args?: string[]; cwd?: string },
-  pluginDir: string,
+  _pluginDir: string,
+  npmBinDir?: string,
 ): AgentLaunch {
   if (opts.cmd) return { cmd: opts.cmd, args: opts.args ?? [], cwd: opts.cwd };
-  // preset = 편의 launch 문자열일 뿐(락인 0 — 코드는 하나, 차이는 명령뿐). 임의 ACP 에이전트는 cmd 로.
-  // 어댑터는 항상 최신 @agentclientprotocol/* — 최신 모델·config 양식. 버전은 @latest 로 고정 안 박는다.
-  //  mock: 결정적 테스트 fixture(SDK AgentSideConnection).
-  //  claude: @agentclientprotocol/claude-agent-acp — 최신 모델(Opus 4.8) 노출, 최신 config 양식 수용.
-  //    @anthropic-ai/claude-agent-sdk 네이티브 binary 필요 → 정식 설치 권장(npx 가 optional dep 못 받으면 npm i -g).
-  //  codex: @agentclientprotocol/codex-acp — codex CLI(ChatGPT 인증)를 ACP 로 브리지.
-  //  gemini: @google/gemini-cli 의 네이티브 ACP 모드(--acp).
-  // 모두 npx — CLI 가 없으면 자동으로 받아오고(종속성 자동 해소), PATH(글로벌 bin 위치)에 안 묶인다.
-  const presets: Record<string, { cmd: string; args: string[] }> = {
-    mock: { cmd: "node", args: [`${pluginDir}/scripts/mock-acp-agent.mjs`] },
-    gemini: { cmd: "npx", args: ["-y", "@google/gemini-cli@latest", "--acp"] },
-    claude: { cmd: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp@latest"] },
-    codex: { cmd: "npx", args: ["-y", "@agentclientprotocol/codex-acp@latest"] },
-  };
-  const p = presets[opts.agent ?? ""];
-  if (!p) throw new Error(`알 수 없는 에이전트: ${opts.agent} (preset: ${Object.keys(presets).join("/")} 또는 cmd 지정)`);
-  return { cmd: p.cmd, args: p.args, cwd: opts.cwd };
+  const p = PRESETS[opts.agent ?? ""];
+  if (!p) {
+    throw new Error(
+      `알 수 없는 에이전트: ${opts.agent} (preset: ${Object.keys(PRESETS).join("/")} 또는 cmd 지정)`,
+    );
+  }
+  if (npmBinDir) return { cmd: `${npmBinDir}/${p.bin}`, args: p.args, cwd: opts.cwd };
+  // npmBinDir 미해소(npm prefix 실패 등) — 마지막 안전망으로 npx(어댑터 자동 fetch). 정상 경로는 절대경로.
+  return { cmd: "npx", args: ["-y", p.pkg, ...p.args], cwd: opts.cwd };
+}
+
+// npm 글로벌 bin 디렉터리 해소 — force-install 된 CLI 를 절대경로로 띄우려고 1회 조회(캐시).
+// `npm prefix -g` 는 npm config(.npmrc)의 prefix 를 PATH 무관하게 돌려준다(npm 자체는 PATH 에 있음).
+// posix: <prefix>/bin, windows: <prefix> 루트에 bin 이 놓인다.
+let npmBinDirCache: string | null | undefined;
+export async function resolveNpmBinDir(app: any): Promise<string | null> {
+  if (npmBinDirCache !== undefined) return npmBinDirCache;
+  try {
+    const handle = await app.process.spawn("npm", ["prefix", "-g"], {});
+    const dec = new TextDecoder();
+    let out = "";
+    app.process.onData(handle, (b: Uint8Array) => {
+      out += dec.decode(b, { stream: true });
+    });
+    await new Promise<void>((res) => app.process.onExit(handle, () => res()));
+    const prefix = out.trim().split(/\r?\n/).pop()?.trim() || "";
+    const win =
+      typeof navigator !== "undefined" &&
+      /win/i.test(navigator.platform || navigator.userAgent || "");
+    npmBinDirCache = prefix ? (win ? prefix : `${prefix}/bin`) : null;
+  } catch {
+    npmBinDirCache = null;
+  }
+  return npmBinDirCache;
 }
 
 // soksak app.process(handle) → SDK Stream(ndJsonStream). 쓰기=process.write, 읽기=process.onData.
@@ -103,7 +133,9 @@ export function createAcpEngine(app: any, pluginDir: string) {
     permission?: PermissionPolicy;
   }): Promise<{ connId: number }> {
     if (!app.process) throw new Error("process capability 없음(권한 미선언?)");
-    const launch = resolveAgent(opts, pluginDir);
+    // force-install 된 글로벌 bin 을 절대경로로 — npm 글로벌 bin 디렉터리 1회 해소(캐시). PATH 무관.
+    const npmBinDir = await resolveNpmBinDir(app);
+    const launch = resolveAgent(opts, pluginDir, npmBinDir ?? undefined);
     // ACP 자식 에이전트 = 에디터가 띄운 독립 세션. 호스트의 Claude Code 중첩 가드(CLAUDECODE 등)를
     // 떼어내 claude 어댑터가 "nested session" 으로 오인해 막히지 않게 한다(soksak 을 Claude Code 안에서
     // 띄운 경우 대비). 타 에이전트(gemini/codex/…)엔 무해 — 해당 키를 안 쓰므로.
