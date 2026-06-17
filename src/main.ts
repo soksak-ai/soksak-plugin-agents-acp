@@ -95,9 +95,9 @@ export default {
 
     addAcp(
       "connect",
-      "ACP 에이전트 연결(spawn + initialize 핸드셰이크) → connId. agent preset(mock/gemini/claude/codex) 또는 cmd 지정",
+      "ACP 에이전트 연결(spawn + initialize 핸드셰이크) → connId. agent preset(gemini/claude/codex) 또는 cmd 지정",
       {
-        agent: { type: "string", description: "preset: mock|gemini|claude|codex" },
+        agent: { type: "string", description: "preset: gemini|claude|codex" },
         cmd: { type: "string", description: "명시 실행 명령(preset 대신)" },
         args: { type: "json", description: "명시 인자(string[])" },
         cwd: { type: "string", description: "작업 디렉토리" },

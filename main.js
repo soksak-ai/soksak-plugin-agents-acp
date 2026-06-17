@@ -13618,17 +13618,40 @@ var RequestError = class _RequestError extends Error {
 };
 
 // src/acp/engine.ts
-function resolveAgent(opts, pluginDir) {
+var PRESETS = {
+  gemini: { bin: "gemini", args: ["--acp"], pkg: "@google/gemini-cli@latest" },
+  claude: { bin: "claude-agent-acp", args: [], pkg: "@agentclientprotocol/claude-agent-acp@latest" },
+  codex: { bin: "codex-acp", args: [], pkg: "@agentclientprotocol/codex-acp@latest" }
+};
+function resolveAgent(opts, _pluginDir, npmBinDir) {
   if (opts.cmd) return { cmd: opts.cmd, args: opts.args ?? [], cwd: opts.cwd };
-  const presets = {
-    mock: { cmd: "node", args: [`${pluginDir}/scripts/mock-acp-agent.mjs`] },
-    gemini: { cmd: "npx", args: ["-y", "@google/gemini-cli@latest", "--acp"] },
-    claude: { cmd: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp@latest"] },
-    codex: { cmd: "npx", args: ["-y", "@agentclientprotocol/codex-acp@latest"] }
-  };
-  const p = presets[opts.agent ?? ""];
-  if (!p) throw new Error(`\uC54C \uC218 \uC5C6\uB294 \uC5D0\uC774\uC804\uD2B8: ${opts.agent} (preset: ${Object.keys(presets).join("/")} \uB610\uB294 cmd \uC9C0\uC815)`);
-  return { cmd: p.cmd, args: p.args, cwd: opts.cwd };
+  const p = PRESETS[opts.agent ?? ""];
+  if (!p) {
+    throw new Error(
+      `\uC54C \uC218 \uC5C6\uB294 \uC5D0\uC774\uC804\uD2B8: ${opts.agent} (preset: ${Object.keys(PRESETS).join("/")} \uB610\uB294 cmd \uC9C0\uC815)`
+    );
+  }
+  if (npmBinDir) return { cmd: `${npmBinDir}/${p.bin}`, args: p.args, cwd: opts.cwd };
+  return { cmd: "npx", args: ["-y", p.pkg, ...p.args], cwd: opts.cwd };
+}
+var npmBinDirCache;
+async function resolveNpmBinDir(app) {
+  if (npmBinDirCache !== void 0) return npmBinDirCache;
+  try {
+    const handle = await app.process.spawn("npm", ["prefix", "-g"], {});
+    const dec = new TextDecoder();
+    let out = "";
+    app.process.onData(handle, (b) => {
+      out += dec.decode(b, { stream: true });
+    });
+    await new Promise((res) => app.process.onExit(handle, () => res()));
+    const prefix = out.trim().split(/\r?\n/).pop()?.trim() || "";
+    const win = typeof navigator !== "undefined" && /win/i.test(navigator.platform || navigator.userAgent || "");
+    npmBinDirCache = prefix ? win ? prefix : `${prefix}/bin` : null;
+  } catch {
+    npmBinDirCache = null;
+  }
+  return npmBinDirCache;
 }
 function makeStream(app, handle) {
   const dec = new TextDecoder();
@@ -13662,7 +13685,8 @@ function createAcpEngine(app, pluginDir) {
   let nextId = 1;
   async function connect(opts) {
     if (!app.process) throw new Error("process capability \uC5C6\uC74C(\uAD8C\uD55C \uBBF8\uC120\uC5B8?)");
-    const launch = resolveAgent(opts, pluginDir);
+    const npmBinDir = await resolveNpmBinDir(app);
+    const launch = resolveAgent(opts, pluginDir, npmBinDir ?? void 0);
     const handle = await app.process.spawn(launch.cmd, launch.args, {
       cwd: launch.cwd,
       envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
@@ -13914,9 +13938,9 @@ var main_default = {
     const addAcp = (name, description, params, handler) => ctx.subscriptions.push(app.commands.register(name, { description, params, handler }));
     addAcp(
       "connect",
-      "ACP \uC5D0\uC774\uC804\uD2B8 \uC5F0\uACB0(spawn + initialize \uD578\uB4DC\uC170\uC774\uD06C) \u2192 connId. agent preset(mock/gemini/claude/codex) \uB610\uB294 cmd \uC9C0\uC815",
+      "ACP \uC5D0\uC774\uC804\uD2B8 \uC5F0\uACB0(spawn + initialize \uD578\uB4DC\uC170\uC774\uD06C) \u2192 connId. agent preset(gemini/claude/codex) \uB610\uB294 cmd \uC9C0\uC815",
       {
-        agent: { type: "string", description: "preset: mock|gemini|claude|codex" },
+        agent: { type: "string", description: "preset: gemini|claude|codex" },
         cmd: { type: "string", description: "\uBA85\uC2DC \uC2E4\uD589 \uBA85\uB839(preset \uB300\uC2E0)" },
         args: { type: "json", description: "\uBA85\uC2DC \uC778\uC790(string[])" },
         cwd: { type: "string", description: "\uC791\uC5C5 \uB514\uB809\uD1A0\uB9AC" },
