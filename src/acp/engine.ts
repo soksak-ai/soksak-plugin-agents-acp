@@ -7,7 +7,7 @@
 // [M1] connect(핸드셰이크 initialize) → session-new → prompt(턴 동안 session/update 수집) → stopReason.
 //   견고함 규율(전송≠수신 인디케이터·순차 턴 큐·stuck)·멀티세션 채널·streaming 이벤트는 M2.
 
-import * as acp from "@zed-industries/agent-client-protocol";
+import * as acp from "@agentclientprotocol/sdk";
 
 export interface AgentLaunch {
   cmd: string;
@@ -22,16 +22,17 @@ export function resolveAgent(
 ): AgentLaunch {
   if (opts.cmd) return { cmd: opts.cmd, args: opts.args ?? [], cwd: opts.cwd };
   // preset = 편의 launch 문자열일 뿐(락인 0 — 코드는 하나, 차이는 명령뿐). 임의 ACP 에이전트는 cmd 로.
+  // 어댑터는 항상 최신 @agentclientprotocol/* — 최신 모델·config 양식. 버전은 @latest 로 고정 안 박는다.
   //  mock: 결정적 테스트 fixture(SDK AgentSideConnection).
-  //  claude: @zed-industries/claude-code-acp 어댑터 — 실 검증됨(initialize→session→prompt→PONG→end_turn).
-  //  codex: @zed-industries/codex-acp 어댑터 — codex CLI(ChatGPT 인증)를 ACP 로 브리지. claude 와 동일
-  //    패턴(같은 Zed 어댑터 계열). codex 네이티브엔 acp 서브커맨드 없음 — 어댑터가 정답.
+  //  claude: @agentclientprotocol/claude-agent-acp — 최신 모델(Opus 4.8) 노출, 최신 config 양식 수용.
+  //    @anthropic-ai/claude-agent-sdk 네이티브 binary 필요 → 정식 설치 권장(npx 가 optional dep 못 받으면 npm i -g).
+  //  codex: @agentclientprotocol/codex-acp — codex CLI(ChatGPT 인증)를 ACP 로 브리지.
   //  gemini: Gemini CLI 의 네이티브 ACP 모드(gemini --acp).
   const presets: Record<string, { cmd: string; args: string[] }> = {
     mock: { cmd: "node", args: [`${pluginDir}/scripts/mock-acp-agent.mjs`] },
     gemini: { cmd: "gemini", args: ["--acp"] },
-    claude: { cmd: "npx", args: ["@zed-industries/claude-code-acp"] },
-    codex: { cmd: "npx", args: ["@zed-industries/codex-acp"] },
+    claude: { cmd: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp@latest"] },
+    codex: { cmd: "npx", args: ["-y", "@agentclientprotocol/codex-acp@latest"] },
   };
   const p = presets[opts.agent ?? ""];
   if (!p) throw new Error(`알 수 없는 에이전트: ${opts.agent} (preset: ${Object.keys(presets).join("/")} 또는 cmd 지정)`);

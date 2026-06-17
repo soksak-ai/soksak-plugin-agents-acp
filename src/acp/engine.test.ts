@@ -15,17 +15,17 @@ describe("resolveAgent — 에이전트 무관 런처(락인 0)", () => {
   it("gemini = gemini --acp", () => {
     expect(resolveAgent({ agent: "gemini" }, DIR)).toEqual({ cmd: "gemini", args: ["--acp"], cwd: undefined });
   });
-  it("claude = npx @zed-industries/claude-code-acp", () => {
+  it("claude = npx @agentclientprotocol/claude-agent-acp (최신 — Opus 4.8)", () => {
     expect(resolveAgent({ agent: "claude" }, DIR)).toEqual({
       cmd: "npx",
-      args: ["@zed-industries/claude-code-acp"],
+      args: ["-y", "@agentclientprotocol/claude-agent-acp@latest"],
       cwd: undefined,
     });
   });
-  it("codex = npx @zed-industries/codex-acp (어댑터)", () => {
+  it("codex = npx @agentclientprotocol/codex-acp (최신)", () => {
     expect(resolveAgent({ agent: "codex" }, DIR)).toEqual({
       cmd: "npx",
-      args: ["@zed-industries/codex-acp"],
+      args: ["-y", "@agentclientprotocol/codex-acp@latest"],
       cwd: undefined,
     });
   });

@@ -1,8 +1,8 @@
 // soksak-plugin-acp-core — Agent Client Protocol(ACP) 클라이언트 엔진(라이브러리 플러그인).
 //
-// 역할: 어떤 ACP 에이전트(Gemini `gemini --acp`, Claude `npx @zed-industries/claude-code-acp`,
+// 역할: 어떤 ACP 에이전트(Gemini `gemini --acp`, Claude `npx @agentclientprotocol/claude-agent-acp`,
 //   Codex …)든 코어 `process` capability 로 서브프로세스로 띄우고, stdio JSON-RPC(NDJSON)로
-//   구조화 통신한다. 그 엔진을 sok 커맨드 + 이벤트로 노출 → 코크핏·라운지가 의존(app.commands.
+//   구조화 통신한다. 그 엔진을 sok 커맨드 + 이벤트로 노출 → 오케스트라·라운지가 의존(app.commands.
 //   execute + app.events)으로 소비한다. UI 없음(순수 공유 라이브러리). 락인 0 — ACP 표준만, 특정
 //   에이전트 결합 0.
 //
