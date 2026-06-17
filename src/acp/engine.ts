@@ -27,10 +27,11 @@ export function resolveAgent(
   //  claude: @agentclientprotocol/claude-agent-acp — 최신 모델(Opus 4.8) 노출, 최신 config 양식 수용.
   //    @anthropic-ai/claude-agent-sdk 네이티브 binary 필요 → 정식 설치 권장(npx 가 optional dep 못 받으면 npm i -g).
   //  codex: @agentclientprotocol/codex-acp — codex CLI(ChatGPT 인증)를 ACP 로 브리지.
-  //  gemini: Gemini CLI 의 네이티브 ACP 모드(gemini --acp).
+  //  gemini: @google/gemini-cli 의 네이티브 ACP 모드(--acp).
+  // 모두 npx — CLI 가 없으면 자동으로 받아오고(종속성 자동 해소), PATH(글로벌 bin 위치)에 안 묶인다.
   const presets: Record<string, { cmd: string; args: string[] }> = {
     mock: { cmd: "node", args: [`${pluginDir}/scripts/mock-acp-agent.mjs`] },
-    gemini: { cmd: "gemini", args: ["--acp"] },
+    gemini: { cmd: "npx", args: ["-y", "@google/gemini-cli@latest", "--acp"] },
     claude: { cmd: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp@latest"] },
     codex: { cmd: "npx", args: ["-y", "@agentclientprotocol/codex-acp@latest"] },
   };

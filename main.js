@@ -13622,7 +13622,7 @@ function resolveAgent(opts, pluginDir) {
   if (opts.cmd) return { cmd: opts.cmd, args: opts.args ?? [], cwd: opts.cwd };
   const presets = {
     mock: { cmd: "node", args: [`${pluginDir}/scripts/mock-acp-agent.mjs`] },
-    gemini: { cmd: "gemini", args: ["--acp"] },
+    gemini: { cmd: "npx", args: ["-y", "@google/gemini-cli@latest", "--acp"] },
     claude: { cmd: "npx", args: ["-y", "@agentclientprotocol/claude-agent-acp@latest"] },
     codex: { cmd: "npx", args: ["-y", "@agentclientprotocol/codex-acp@latest"] }
   };
