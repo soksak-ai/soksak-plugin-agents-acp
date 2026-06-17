@@ -4,7 +4,7 @@
   "name": "ACP Core",
   "version": "0.0.1",
   "repo": "https://github.com/soksak-ai/soksak-plugin-acp-core.git",
-  "description": "Agent Client Protocol 클라이언트 엔진(라이브러리) — 어떤 ACP 에이전트(Gemini·Claude·Codex…)든 서브프로세스로 띄워 구조화 통신. 코크핏·라운지가 의존. 락인 0(ACP 표준만).",
+  "description": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다.",
   "entry": "main.js",
   "permissions": [
     "process",

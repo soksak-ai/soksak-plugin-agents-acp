@@ -2,9 +2,8 @@
 //
 // 역할: 어떤 ACP 에이전트(Gemini `gemini --acp`, Claude `npx @agentclientprotocol/claude-agent-acp`,
 //   Codex …)든 코어 `process` capability 로 서브프로세스로 띄우고, stdio JSON-RPC(NDJSON)로
-//   구조화 통신한다. 그 엔진을 sok 커맨드 + 이벤트로 노출 → 오케스트라·라운지가 의존(app.commands.
-//   execute + app.events)으로 소비한다. UI 없음(순수 공유 라이브러리). 락인 0 — ACP 표준만, 특정
-//   에이전트 결합 0.
+//   구조화 통신한다. 그 엔진을 sok 커맨드 + 이벤트로 노출 → 의존 플러그인이 app.commands.execute +
+//   app.events 로 소비한다. UI 없음(순수 공유 라이브러리). ACP 표준만 따르므로 특정 에이전트에 안 묶인다.
 //
 // 견고함 규율(claude-gui 계승): 전송≠수신(증거 전 인디케이터)·순차 턴 큐·stuck·NDJSON partial-frame
 //   버퍼링·no-fake-progress·remount 생존. 깨지기 쉬운 정규식 스크래핑 대신 ACP 구조화 신호로 구현.

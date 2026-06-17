@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "soksak ACP 코어 — Agent Client Protocol 클라이언트 엔진(라이브러리 플러그인). 오케스트라·라운지가 의존.",
+  "description": "AI 코딩 에이전트(ACP)를 다루는 soksak 라이브러리 플러그인 — 에이전트를 서브프로세스로 실행하고 표준 프로토콜로 통신하는 엔진을 커맨드·이벤트로 노출.",
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
