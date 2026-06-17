@@ -12,8 +12,12 @@ describe("resolveAgent — 에이전트 무관 런처(락인 0)", () => {
       cwd: undefined,
     });
   });
-  it("gemini = gemini --acp", () => {
-    expect(resolveAgent({ agent: "gemini" }, DIR)).toEqual({ cmd: "gemini", args: ["--acp"], cwd: undefined });
+  it("gemini = npx @google/gemini-cli --acp", () => {
+    expect(resolveAgent({ agent: "gemini" }, DIR)).toEqual({
+      cmd: "npx",
+      args: ["-y", "@google/gemini-cli@latest", "--acp"],
+      cwd: undefined,
+    });
   });
   it("claude = npx @agentclientprotocol/claude-agent-acp (최신 — Opus 4.8)", () => {
     expect(resolveAgent({ agent: "claude" }, DIR)).toEqual({
