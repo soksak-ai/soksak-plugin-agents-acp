@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "soksak ACP 코어 — Agent Client Protocol 클라이언트 엔진(라이브러리 플러그인). 코크핏·라운지가 의존.",
+  "description": "soksak ACP 코어 — Agent Client Protocol 클라이언트 엔진(라이브러리 플러그인). 오케스트라·라운지가 의존.",
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@zed-industries/agent-client-protocol": "^0.4.5"
+    "@agentclientprotocol/sdk": "^0.26.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
