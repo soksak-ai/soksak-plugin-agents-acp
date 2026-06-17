@@ -148,7 +148,7 @@ export function createAcpEngine(app: any, pluginDir: string) {
         if (arr) arr.push(params.update);
         // 진행 증거 도착 — 이 세션의 무활동 타이머 리셋(활발한 턴은 stuck 으로 안 끊긴다).
         rec.activityBumps.get(params.sessionId)?.();
-        // 스트리밍 — 의존 플러그인(코크핏/라운지)이 `acp.update.<connId>` 구독해 라이브 렌더.
+        // 스트리밍 — 구독자가 `acp.update.<connId>` 로 라이브 렌더(collect 와 별개 채널).
         // collect(prompt 반환값)와 별개 채널(둘 다: 헤드리스는 반환, UI 는 스트리밍).
         app.bus?.emit(`acp.update.${id}`, {
           connId: id,
