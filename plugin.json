@@ -12,6 +12,38 @@
     "fs:read",
     "fs:write"
   ],
+  "libraries": [
+    {
+      "name": "@agentclientprotocol/claude-agent-acp",
+      "bin": "claude-agent-acp",
+      "label": "Claude ACP 어댑터",
+      "install": {
+        "darwin": "npm i -g @agentclientprotocol/claude-agent-acp@latest",
+        "linux": "npm i -g @agentclientprotocol/claude-agent-acp@latest",
+        "win32": "npm i -g @agentclientprotocol/claude-agent-acp@latest"
+      }
+    },
+    {
+      "name": "@agentclientprotocol/codex-acp",
+      "bin": "codex-acp",
+      "label": "Codex ACP 어댑터",
+      "install": {
+        "darwin": "npm i -g @agentclientprotocol/codex-acp@latest",
+        "linux": "npm i -g @agentclientprotocol/codex-acp@latest",
+        "win32": "npm i -g @agentclientprotocol/codex-acp@latest"
+      }
+    },
+    {
+      "name": "@google/gemini-cli",
+      "bin": "gemini",
+      "label": "Gemini CLI",
+      "install": {
+        "darwin": "npm i -g @google/gemini-cli@latest",
+        "linux": "npm i -g @google/gemini-cli@latest",
+        "win32": "npm i -g @google/gemini-cli@latest"
+      }
+    }
+  ],
   "contributes": {
     "commands": [
       {
