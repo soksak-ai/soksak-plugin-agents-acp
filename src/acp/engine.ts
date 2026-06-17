@@ -103,6 +103,21 @@ function makeStream(app: any, handle: number): acp.Stream {
   return acp.ndJsonStream(writable, readable);
 }
 
+// agent_message_chunk 들을 어시스턴트 텍스트로 조립 — 스트리밍 델타를 잇되, 일부 어댑터(claude)가
+// 델타 후 보내는 "최종 완결본 재전송"(누적 전체와 동일한 마지막 청크)을 제거해 2배 중복을 막는다.
+// canonical 재주입(오케스트라 transcript)이 이 텍스트를 매 턴 다시 넣으므로 클린이 필수.
+export function assistantText(updates: any[]): string {
+  const chunks = (updates ?? [])
+    .filter((u) => u?.sessionUpdate === "agent_message_chunk")
+    .map((u) => u?.content?.text ?? "");
+  if (chunks.length >= 2) {
+    const last = chunks[chunks.length - 1];
+    const prior = chunks.slice(0, -1).join("");
+    if (last !== "" && last === prior) chunks.pop(); // 최종 완결 재전송 제거(중복 방지)
+  }
+  return chunks.join("");
+}
+
 type PermissionPolicy = "allow" | "deny" | "ask";
 
 interface Conn {
@@ -278,13 +293,19 @@ export function createAcpEngine(app: any, pluginDir: string) {
     sessionId: string,
     text: string,
     timeoutMs: number,
-  ): Promise<{ stopReason: string; updates: any[]; stderr?: string }> {
+  ): Promise<{ stopReason: string; updates: any[]; text: string; stderr?: string }> {
     if (c.exited) throw new Error("에이전트 종료됨(연결 죽음) — 프롬프트 불가");
     const updates: any[] = [];
     c.collectors.set(sessionId, updates);
     try {
       const r = await raceTurn(c, sessionId, text, timeoutMs);
-      return { stopReason: r.stopReason, updates, stderr: c.stderr || undefined };
+      // text = 조립된 어시스턴트 응답(델타 + 최종 완결 재전송 dedup). 소비자는 이걸 쓰면 2배 중복 0.
+      return {
+        stopReason: r.stopReason,
+        updates,
+        text: assistantText(updates),
+        stderr: c.stderr || undefined,
+      };
     } finally {
       c.collectors.delete(sessionId);
     }
@@ -333,7 +354,7 @@ export function createAcpEngine(app: any, pluginDir: string) {
     sessionId: string,
     text: string,
     opts?: { timeoutMs?: number },
-  ): Promise<{ stopReason: string; updates: any[]; stderr?: string }> {
+  ): Promise<{ stopReason: string; updates: any[]; text: string; stderr?: string }> {
     const c = get(connId);
     // timeoutMs = 무활동(stuck) 한도. 첫 토큰까지의 think 시간 + 청크 사이 간격에 적용(턴 전체 아님).
     // 기본 120s 침묵 = stuck. 활발히 스트리밍하면 매 update 마다 리셋되어 안 끊긴다.
