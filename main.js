@@ -5279,10 +5279,17 @@ function createAcpEngine(app, pluginDir) {
     if (!c) throw new Error(`\uC5F0\uACB0 \uC5C6\uC74C: ${connId}`);
     return c;
   }
-  async function sessionNew(connId, cwd) {
+  async function sessionNew(connId, cwd, model) {
     const c = get(connId);
     const r = await c.conn.newSession({ cwd: cwd ?? "/", mcpServers: [] });
-    return { sessionId: r.sessionId };
+    const sessionId = r.sessionId;
+    if (model && typeof c.conn.setSessionModel === "function") {
+      try {
+        await c.conn.setSessionModel({ sessionId, modelId: model });
+      } catch {
+      }
+    }
+    return { sessionId, models: r.models ?? null, modes: r.modes ?? null };
   }
   async function runTurn(c, sessionId, text, timeoutMs) {
     if (c.exited) throw new Error("\uC5D0\uC774\uC804\uD2B8 \uC885\uB8CC\uB428(\uC5F0\uACB0 \uC8FD\uC74C) \u2014 \uD504\uB86C\uD504\uD2B8 \uBD88\uAC00");
@@ -5448,11 +5455,15 @@ var main_default = {
     );
     addAcp(
       "session-new",
-      "\uC0C8 ACP \uC138\uC158 \u2192 sessionId",
-      { connId: { type: "number", required: true }, cwd: { type: "string" } },
+      "\uC0C8 ACP \uC138\uC158 \u2192 sessionId + availableModels/modes. model \uC9C0\uC815 \uC2DC setSessionModel(claude: default/sonnet/haiku)",
+      {
+        connId: { type: "number", required: true },
+        cwd: { type: "string" },
+        model: { type: "string", description: "\uBAA8\uB378 id(\uC5B4\uB311\uD130 availableModels \uC911 \uD558\uB098)" }
+      },
       async (p) => {
         try {
-          return { ok: true, ...await engine.sessionNew(p.connId, p.cwd) };
+          return { ok: true, ...await engine.sessionNew(p.connId, p.cwd, p.model) };
         } catch (e) {
           return { ok: false, error: String(e) };
         }
