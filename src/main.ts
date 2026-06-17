@@ -117,11 +117,15 @@ export default {
     );
     addAcp(
       "session-new",
-      "새 ACP 세션 → sessionId",
-      { connId: { type: "number", required: true }, cwd: { type: "string" } },
+      "새 ACP 세션 → sessionId + availableModels/modes. model 지정 시 setSessionModel(claude: default/sonnet/haiku)",
+      {
+        connId: { type: "number", required: true },
+        cwd: { type: "string" },
+        model: { type: "string", description: "모델 id(어댑터 availableModels 중 하나)" },
+      },
       async (p) => {
         try {
-          return { ok: true, ...(await engine.sessionNew(p.connId, p.cwd)) };
+          return { ok: true, ...(await engine.sessionNew(p.connId, p.cwd, p.model)) };
         } catch (e) {
           return { ok: false, error: String(e) };
         }
