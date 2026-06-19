@@ -253,10 +253,24 @@ export function createAcpEngine(app: any, pluginDir: string) {
     const stream = makeStream(app, handle);
     const c = new acp.ClientSideConnection((_agent) => client, stream);
     rec.conn = c;
-    await c.initialize({
-      protocolVersion: acp.PROTOCOL_VERSION,
-      clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } },
-    } as any);
+    try {
+      await c.initialize({
+        protocolVersion: acp.PROTOCOL_VERSION,
+        clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } },
+      } as any);
+    } catch (e) {
+      // 핸드셰이크 실패 — 흔히 자식 프로세스 즉사(예: 어댑터가 네이티브 바이너리 spawn 실패 ENOENT,
+      // 잘못된 아키텍처). "code 1" 로 뭉개지 말고 캡처한 자식 stderr 를 사유로 동봉해 connect 응답이
+      // 그대로 진단 가능하게(파이프라인 진단 — 별도 스크립트 불요). 프로세스 정리 = 멱등(반복 연결 누수 0).
+      await new Promise((r) => setTimeout(r, 150)); // 죽기 직전 stderr 드레인
+      try {
+        await app.process.kill(handle);
+      } catch {
+        /* 이미 종료 */
+      }
+      const reason = rec.stderr.trim();
+      throw new Error(reason ? `${String(e)}\n[child stderr]\n${reason}` : String(e));
+    }
     connections.set(id, rec);
     return { connId: id };
   }
