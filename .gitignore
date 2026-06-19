@@ -4,5 +4,8 @@ dist
 .DS_Store
 # main.js 는 배포 entry라 추적(번들 플러그인은 설치=clone+entry, 빌드스텝 0).
 
+# 머신-로컬 dev 마커(추적 금지 — 배포 메타는 별도 파일)
+.soksak.json
+
 # local-only working notes (never committed)
 secret/
