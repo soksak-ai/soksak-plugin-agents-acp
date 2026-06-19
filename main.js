@@ -13680,14 +13680,20 @@ function makeStream(app, handle) {
   });
   return ndJsonStream(writable, readable);
 }
-function assistantText(updates) {
-  const chunks = (updates ?? []).filter((u) => u?.sessionUpdate === "agent_message_chunk").map((u) => u?.content?.text ?? "");
+function joinChunks(updates, kind) {
+  const chunks = (updates ?? []).filter((u) => u?.sessionUpdate === kind).map((u) => u?.content?.text ?? "");
   if (chunks.length >= 2) {
     const last = chunks[chunks.length - 1];
     const prior = chunks.slice(0, -1).join("");
     if (last !== "" && last === prior) chunks.pop();
   }
   return chunks.join("");
+}
+function assistantText(updates) {
+  return joinChunks(updates, "agent_message_chunk");
+}
+function reasoningText(updates) {
+  return joinChunks(updates, "agent_thought_chunk");
 }
 function createAcpEngine(app, pluginDir) {
   const connections = /* @__PURE__ */ new Map();
@@ -13822,10 +13828,12 @@ ${reason}` : String(e));
     c.collectors.set(sessionId, updates);
     try {
       const r = await raceTurn(c, sessionId, text, timeoutMs);
+      const reasoning = reasoningText(updates);
       return {
         stopReason: r.stopReason,
         updates,
         text: assistantText(updates),
+        ...reasoning ? { reasoning } : {},
         stderr: c.stderr || void 0
       };
     } finally {
