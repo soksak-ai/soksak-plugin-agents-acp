@@ -13780,10 +13780,22 @@ function createAcpEngine(app, pluginDir) {
     const stream = makeStream(app, handle);
     const c = new ClientSideConnection((_agent) => client, stream);
     rec.conn = c;
-    await c.initialize({
-      protocolVersion: PROTOCOL_VERSION,
-      clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } }
-    });
+    try {
+      await c.initialize({
+        protocolVersion: PROTOCOL_VERSION,
+        clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } }
+      });
+    } catch (e) {
+      await new Promise((r) => setTimeout(r, 150));
+      try {
+        await app.process.kill(handle);
+      } catch {
+      }
+      const reason = rec.stderr.trim();
+      throw new Error(reason ? `${String(e)}
+[child stderr]
+${reason}` : String(e));
+    }
     connections.set(id, rec);
     return { connId: id };
   }
