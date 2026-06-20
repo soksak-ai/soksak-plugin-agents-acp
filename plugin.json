@@ -1,10 +1,16 @@
 {
   "spec": "soksak-spec-plugin@0.0.1",
   "id": "soksak-plugin-acp-core",
-  "name": "ACP Core",
+  "name": {
+    "en": "ACP Core",
+    "ko": "ACP Core"
+  },
   "version": "0.0.1",
   "repo": "https://github.com/soksak-ai/soksak-plugin-acp-core.git",
-  "description": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다.",
+  "description": {
+    "en": "Library plugin (no UI) for managing AI coding agents. Runs ACP agents (Claude, Codex, Gemini) as subprocesses and exposes the ACP communication engine via commands and events.",
+    "ko": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다."
+  },
   "entry": "main.js",
   "permissions": [
     "process",
@@ -48,35 +54,59 @@
     "commands": [
       {
         "name": "ping",
-        "title": "ACP 코어 적재/버전 확인(E2E)"
+        "title": {
+          "en": "Ping (load/version check)",
+          "ko": "ACP 코어 적재/버전 확인(E2E)"
+        }
       },
       {
         "name": "exec",
-        "title": "외부 프로그램 실행(process primitive)"
+        "title": {
+          "en": "Exec (process primitive)",
+          "ko": "외부 프로그램 실행(process primitive)"
+        }
       },
       {
         "name": "connect",
-        "title": "ACP 에이전트 연결"
+        "title": {
+          "en": "Connect Agent",
+          "ko": "ACP 에이전트 연결"
+        }
       },
       {
         "name": "session-new",
-        "title": "새 ACP 세션"
+        "title": {
+          "en": "New ACP Session",
+          "ko": "새 ACP 세션"
+        }
       },
       {
         "name": "prompt",
-        "title": "프롬프트 전송"
+        "title": {
+          "en": "Send Prompt",
+          "ko": "프롬프트 전송"
+        }
       },
       {
         "name": "cancel",
-        "title": "턴 취소"
+        "title": {
+          "en": "Cancel Turn",
+          "ko": "턴 취소"
+        }
       },
       {
         "name": "disconnect",
-        "title": "연결 종료"
+        "title": {
+          "en": "Disconnect",
+          "ko": "연결 종료"
+        }
       },
       {
         "name": "connections",
-        "title": "활성 연결 목록"
+        "title": {
+          "en": "Active Connections",
+          "ko": "활성 연결 목록"
+        }
       }
     ]
   }
