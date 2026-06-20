@@ -1,4 +1,4 @@
-# soksak-plugin-acp-core
+# soksak-plugin-agents-acp
 
 soksak에서 AI 코딩 에이전트를 다루는 라이브러리 플러그인. 화면(UI)은 없다.
 
