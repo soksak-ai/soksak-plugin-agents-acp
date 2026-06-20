@@ -13915,7 +13915,7 @@ var main_default = {
         triggers: { ko: "ACP \uCF54\uC5B4 \uC801\uC7AC \uBC84\uC804 \uD655\uC778" },
         handler: async () => ({
           ok: true,
-          plugin: "soksak-plugin-acp-core",
+          plugin: "soksak-plugin-agents-acp",
           version: "0.1.0",
           phase: "M0"
         })

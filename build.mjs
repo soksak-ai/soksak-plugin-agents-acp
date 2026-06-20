@@ -19,8 +19,8 @@ const opts = {
 if (process.argv.includes("--watch")) {
   const ctx = await context(opts);
   await ctx.watch();
-  console.log("[acp-core] watching src → main.js …");
+  console.log("[agents-acp] watching src → main.js …");
 } else {
   await build(opts);
-  console.log("[acp-core] built main.js");
+  console.log("[agents-acp] built main.js");
 }

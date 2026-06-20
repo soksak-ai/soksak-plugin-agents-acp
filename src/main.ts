@@ -1,4 +1,4 @@
-// soksak-plugin-acp-core — Agent Client Protocol(ACP) 클라이언트 엔진(라이브러리 플러그인).
+// soksak-plugin-agents-acp — Agent Client Protocol(ACP) 클라이언트 엔진(라이브러리 플러그인).
 //
 // 역할: 어떤 ACP 에이전트(Gemini `gemini --acp`, Claude `npx @agentclientprotocol/claude-agent-acp`,
 //   Codex …)든 코어 `process` capability 로 서브프로세스로 띄우고, stdio JSON-RPC(NDJSON)로
@@ -24,7 +24,7 @@ export default {
         triggers: { ko: "ACP 코어 적재 버전 확인" },
         handler: async () => ({
           ok: true,
-          plugin: "soksak-plugin-acp-core",
+          plugin: "soksak-plugin-agents-acp",
           version: "0.1.0",
           phase: "M0",
         }),
