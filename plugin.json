@@ -1,9 +1,9 @@
 {
   "spec": "soksak-plugin-spec@1",
-  "id": "soksak-plugin-acp-core",
+  "id": "soksak-plugin-agents-acp",
   "name": { "en": "ACP Core", "ko": "ACP Core" },
   "version": "0.1.0",
-  "repo": "https://github.com/soksak-ai/soksak-plugin-acp-core.git",
+  "repo": "https://github.com/soksak-ai/soksak-plugin-agents-acp.git",
   "description": { "en": "Library plugin (no UI) for managing AI coding agents. Runs ACP agents (Claude, Codex, Gemini) as subprocesses and exposes the ACP communication engine via commands and events.", "ko": "AI 코딩 에이전트를 다루는 라이브러리 플러그인(UI 없음). Claude·Codex·Gemini 같은 ACP 에이전트를 서브프로세스로 실행하고, 표준 프로토콜(ACP)로 통신하는 엔진을 커맨드·이벤트로 노출한다." },
   "entry": "main.js",
   "permissions": ["process", "commands", "fs:read", "fs:write"],

@@ -1,4 +1,4 @@
-# soksak-plugin-acp-core
+# soksak-plugin-agents-acp
 
 A library plugin for managing AI coding agents in soksak. No UI.
 
