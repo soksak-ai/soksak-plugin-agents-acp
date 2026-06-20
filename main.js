@@ -13911,7 +13911,8 @@ var main_default = {
     if (!reg) return;
     ctx.subscriptions.push(
       app.commands.register("ping", {
-        description: "ACP \uCF54\uC5B4 \uC801\uC7AC/\uBC84\uC804 \uD655\uC778(E2E)",
+        description: "Check that the ACP core plugin is loaded and return its version. Use for E2E health checks.",
+        triggers: { ko: "ACP \uCF54\uC5B4 \uC801\uC7AC \uBC84\uC804 \uD655\uC778" },
         handler: async () => ({
           ok: true,
           plugin: "soksak-plugin-acp-core",
@@ -13922,13 +13923,14 @@ var main_default = {
     );
     ctx.subscriptions.push(
       app.commands.register("exec", {
-        description: "\uC678\uBD80 \uD504\uB85C\uADF8\uB7A8 \uC2E4\uD589 \u2014 stdin \uBCF4\uB0B4\uACE0 stdout/stderr/exit \uC218\uC9D1(process capability primitive\xB7E2E)",
+        description: "Spawn an external program, send optional stdin, and collect stdout/stderr/exitCode. Primitive over the process capability. Use for arbitrary CLI integration or as a base for ACP agent launchers.",
+        triggers: { ko: "\uC678\uBD80 \uD504\uB85C\uADF8\uB7A8 \uC2E4\uD589 stdin stdout \uC218\uC9D1" },
         params: {
-          cmd: { type: "string", required: true, description: "\uC2E4\uD589\uD560 \uD504\uB85C\uADF8\uB7A8" },
-          args: { type: "json", description: "\uC778\uC790 \uBC30\uC5F4(string[])" },
-          stdin: { type: "string", description: "\uD45C\uC900\uC785\uB825\uC73C\uB85C \uBCF4\uB0BC \uBB38\uC790\uC5F4(\uC0DD\uB7B5 \uAC00\uB2A5)" },
-          cwd: { type: "string", description: "\uC791\uC5C5 \uB514\uB809\uD1A0\uB9AC" },
-          waitMs: { type: "number", description: "\uC218\uC9D1 \uCD5C\uB300 \uB300\uAE30(ms, \uAE30\uBCF8 2000)" }
+          cmd: { type: "string", required: true, description: "Program to execute" },
+          args: { type: "json", description: "Argument array (string[])" },
+          stdin: { type: "string", description: "String to send to standard input (optional)" },
+          cwd: { type: "string", description: "Working directory" },
+          waitMs: { type: "number", description: "Maximum collection wait in ms (default 2000)" }
         },
         handler: async (p) => {
           const proc = app.process;
@@ -13969,18 +13971,19 @@ var main_default = {
       })
     );
     const engine = createAcpEngine(app, ctx.dir);
-    const addAcp = (name, description, params, handler) => ctx.subscriptions.push(app.commands.register(name, { description, params, handler }));
+    const addAcp = (name, description, triggers, params, handler) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler }));
     addAcp(
       "connect",
-      "ACP \uC5D0\uC774\uC804\uD2B8 \uC5F0\uACB0(spawn + initialize \uD578\uB4DC\uC170\uC774\uD06C) \u2192 connId. agent preset(gemini/claude/codex) \uB610\uB294 cmd \uC9C0\uC815",
+      "Spawn an ACP agent process and complete the initialize handshake. Returns connId. Supply an agent preset (gemini/claude/codex) or an explicit cmd.",
+      { ko: "ACP \uC5D0\uC774\uC804\uD2B8 \uC5F0\uACB0 \uCD08\uAE30\uD654 \uD578\uB4DC\uC170\uC774\uD06C" },
       {
-        agent: { type: "string", description: "preset: gemini|claude|codex" },
-        cmd: { type: "string", description: "\uBA85\uC2DC \uC2E4\uD589 \uBA85\uB839(preset \uB300\uC2E0)" },
-        args: { type: "json", description: "\uBA85\uC2DC \uC778\uC790(string[])" },
-        cwd: { type: "string", description: "\uC791\uC5C5 \uB514\uB809\uD1A0\uB9AC" },
+        agent: { type: "string", description: "Built-in preset: gemini|claude|codex" },
+        cmd: { type: "string", description: "Explicit command to run (overrides preset)" },
+        args: { type: "json", description: "Explicit argument array (string[])" },
+        cwd: { type: "string", description: "Working directory" },
         permission: {
           type: "string",
-          description: "\uAD8C\uD55C \uC815\uCC45: deny(\uAE30\uBCF8\xB7\uC548\uC804)|allow|ask(\uC758\uC874 \uD50C\uB7EC\uADF8\uC778\uC774 \uBC84\uC2A4\uB85C \uACB0\uC815)"
+          description: "Permission policy: deny (default, safe) | allow | ask (dependent plugin decides via bus)"
         }
       },
       async (p) => {
@@ -13993,11 +13996,12 @@ var main_default = {
     );
     addAcp(
       "session-new",
-      "\uC0C8 ACP \uC138\uC158 \u2192 sessionId + availableModels/modes. model \uC9C0\uC815 \uC2DC setSessionModel(claude: default/sonnet/haiku)",
+      "Create a new ACP session on a connection and return sessionId plus availableModels/modes. Optionally select a model via setSessionModel (e.g. claude: default/sonnet/haiku).",
+      { ko: "ACP \uC138\uC158 \uC0DD\uC131 \uC5F0\uACB0 \uC2DC\uC791 \uBAA8\uB378 \uC120\uD0DD" },
       {
         connId: { type: "number", required: true },
         cwd: { type: "string" },
-        model: { type: "string", description: "\uBAA8\uB378 id(\uC5B4\uB311\uD130 availableModels \uC911 \uD558\uB098)" }
+        model: { type: "string", description: "Model id (one of the adapter's availableModels)" }
       },
       async (p) => {
         try {
@@ -14009,12 +14013,13 @@ var main_default = {
     );
     addAcp(
       "prompt",
-      "\uD504\uB86C\uD504\uD2B8 \uC804\uC1A1 \u2014 \uD134 \uB3D9\uC548 session/update \uC218\uC9D1 \uD6C4 stopReason \uBC18\uD658(\uC21C\uCC28 \uD050\xB7stuck timeout\xB7death \uBCF4\uD638)",
+      "Send a prompt to an ACP session. Collects session/update events during the turn and returns stopReason. Protected by sequential turn queue, stuck timeout, and agent-death detection.",
+      { ko: "\uD504\uB86C\uD504\uD2B8 \uC804\uC1A1 \uD134 \uC751\uB2F5 \uC218\uC9D1 stopReason \uBC18\uD658" },
       {
         connId: { type: "number", required: true },
         sessionId: { type: "string", required: true },
         text: { type: "string", required: true },
-        timeoutMs: { type: "number", description: "stuck \uD310\uC815 \uD0C0\uC784\uC544\uC6C3(\uAE30\uBCF8 60000)" }
+        timeoutMs: { type: "number", description: "Stuck detection timeout in ms (default 60000)" }
       },
       async (p) => {
         try {
@@ -14029,7 +14034,8 @@ var main_default = {
     );
     addAcp(
       "cancel",
-      "\uC9C4\uD589 \uC911 \uD134 \uCDE8\uC18C(session/cancel)",
+      "Cancel an in-progress turn by sending session/cancel to the agent.",
+      { ko: "\uC9C4\uD589 \uC911 \uD134 \uCDE8\uC18C \uC138\uC158 \uCE94\uC2AC" },
       { connId: { type: "number", required: true }, sessionId: { type: "string", required: true } },
       async (p) => {
         try {
@@ -14042,14 +14048,15 @@ var main_default = {
     );
     addAcp(
       "disconnect",
-      "\uC5F0\uACB0 \uC885\uB8CC(\uC5D0\uC774\uC804\uD2B8 kill)",
+      "Terminate an ACP connection and kill the agent subprocess.",
+      { ko: "ACP \uC5F0\uACB0 \uC885\uB8CC \uC5D0\uC774\uC804\uD2B8 \uC885\uB8CC" },
       { connId: { type: "number", required: true } },
       async (p) => {
         await engine.disconnect(p.connId);
         return { ok: true };
       }
     );
-    addAcp("connections", "\uD65C\uC131 \uC5F0\uACB0 \uBAA9\uB85D", {}, async () => ({
+    addAcp("connections", "List all active ACP connections.", { ko: "\uD65C\uC131 ACP \uC5F0\uACB0 \uBAA9\uB85D \uC870\uD68C" }, {}, async () => ({
       ok: true,
       connections: engine.list()
     }));

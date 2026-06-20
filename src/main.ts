@@ -20,7 +20,8 @@ export default {
 
     ctx.subscriptions.push(
       app.commands.register("ping", {
-        description: "ACP 코어 적재/버전 확인(E2E)",
+        description: "Check that the ACP core plugin is loaded and return its version. Use for E2E health checks.",
+        triggers: { ko: "ACP 코어 적재 버전 확인" },
         handler: async () => ({
           ok: true,
           plugin: "soksak-plugin-acp-core",
@@ -36,13 +37,14 @@ export default {
     ctx.subscriptions.push(
       app.commands.register("exec", {
         description:
-          "외부 프로그램 실행 — stdin 보내고 stdout/stderr/exit 수집(process capability primitive·E2E)",
+          "Spawn an external program, send optional stdin, and collect stdout/stderr/exitCode. Primitive over the process capability. Use for arbitrary CLI integration or as a base for ACP agent launchers.",
+        triggers: { ko: "외부 프로그램 실행 stdin stdout 수집" },
         params: {
-          cmd: { type: "string", required: true, description: "실행할 프로그램" },
-          args: { type: "json", description: "인자 배열(string[])" },
-          stdin: { type: "string", description: "표준입력으로 보낼 문자열(생략 가능)" },
-          cwd: { type: "string", description: "작업 디렉토리" },
-          waitMs: { type: "number", description: "수집 최대 대기(ms, 기본 2000)" },
+          cmd: { type: "string", required: true, description: "Program to execute" },
+          args: { type: "json", description: "Argument array (string[])" },
+          stdin: { type: "string", description: "String to send to standard input (optional)" },
+          cwd: { type: "string", description: "Working directory" },
+          waitMs: { type: "number", description: "Maximum collection wait in ms (default 2000)" },
         },
         handler: async (p: any) => {
           const proc = app.process;
@@ -89,21 +91,23 @@ export default {
     const addAcp = (
       name: string,
       description: string,
+      triggers: { ko: string },
       params: any,
       handler: (p: any) => Promise<any>,
-    ) => ctx.subscriptions.push(app.commands.register(name, { description, params, handler }));
+    ) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler }));
 
     addAcp(
       "connect",
-      "ACP 에이전트 연결(spawn + initialize 핸드셰이크) → connId. agent preset(gemini/claude/codex) 또는 cmd 지정",
+      "Spawn an ACP agent process and complete the initialize handshake. Returns connId. Supply an agent preset (gemini/claude/codex) or an explicit cmd.",
+      { ko: "ACP 에이전트 연결 초기화 핸드셰이크" },
       {
-        agent: { type: "string", description: "preset: gemini|claude|codex" },
-        cmd: { type: "string", description: "명시 실행 명령(preset 대신)" },
-        args: { type: "json", description: "명시 인자(string[])" },
-        cwd: { type: "string", description: "작업 디렉토리" },
+        agent: { type: "string", description: "Built-in preset: gemini|claude|codex" },
+        cmd: { type: "string", description: "Explicit command to run (overrides preset)" },
+        args: { type: "json", description: "Explicit argument array (string[])" },
+        cwd: { type: "string", description: "Working directory" },
         permission: {
           type: "string",
-          description: "권한 정책: deny(기본·안전)|allow|ask(의존 플러그인이 버스로 결정)",
+          description: "Permission policy: deny (default, safe) | allow | ask (dependent plugin decides via bus)",
         },
       },
       async (p) => {
@@ -116,11 +120,12 @@ export default {
     );
     addAcp(
       "session-new",
-      "새 ACP 세션 → sessionId + availableModels/modes. model 지정 시 setSessionModel(claude: default/sonnet/haiku)",
+      "Create a new ACP session on a connection and return sessionId plus availableModels/modes. Optionally select a model via setSessionModel (e.g. claude: default/sonnet/haiku).",
+      { ko: "ACP 세션 생성 연결 시작 모델 선택" },
       {
         connId: { type: "number", required: true },
         cwd: { type: "string" },
-        model: { type: "string", description: "모델 id(어댑터 availableModels 중 하나)" },
+        model: { type: "string", description: "Model id (one of the adapter's availableModels)" },
       },
       async (p) => {
         try {
@@ -132,12 +137,13 @@ export default {
     );
     addAcp(
       "prompt",
-      "프롬프트 전송 — 턴 동안 session/update 수집 후 stopReason 반환(순차 큐·stuck timeout·death 보호)",
+      "Send a prompt to an ACP session. Collects session/update events during the turn and returns stopReason. Protected by sequential turn queue, stuck timeout, and agent-death detection.",
+      { ko: "프롬프트 전송 턴 응답 수집 stopReason 반환" },
       {
         connId: { type: "number", required: true },
         sessionId: { type: "string", required: true },
         text: { type: "string", required: true },
-        timeoutMs: { type: "number", description: "stuck 판정 타임아웃(기본 60000)" },
+        timeoutMs: { type: "number", description: "Stuck detection timeout in ms (default 60000)" },
       },
       async (p) => {
         try {
@@ -152,7 +158,8 @@ export default {
     );
     addAcp(
       "cancel",
-      "진행 중 턴 취소(session/cancel)",
+      "Cancel an in-progress turn by sending session/cancel to the agent.",
+      { ko: "진행 중 턴 취소 세션 캔슬" },
       { connId: { type: "number", required: true }, sessionId: { type: "string", required: true } },
       async (p) => {
         try {
@@ -165,14 +172,15 @@ export default {
     );
     addAcp(
       "disconnect",
-      "연결 종료(에이전트 kill)",
+      "Terminate an ACP connection and kill the agent subprocess.",
+      { ko: "ACP 연결 종료 에이전트 종료" },
       { connId: { type: "number", required: true } },
       async (p) => {
         await engine.disconnect(p.connId);
         return { ok: true };
       },
     );
-    addAcp("connections", "활성 연결 목록", {}, async () => ({
+    addAcp("connections", "List all active ACP connections.", { ko: "활성 ACP 연결 목록 조회" }, {}, async () => ({
       ok: true,
       connections: engine.list(),
     }));
