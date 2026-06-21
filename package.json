@@ -8,7 +8,9 @@
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "doctor": "soksak-plugin-doctor",
+    "prepublishOnly": "npm run doctor"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.26.0"
@@ -17,6 +19,7 @@
     "@types/node": "^24.10.1",
     "esbuild": "^0.24.2",
     "typescript": "~5.9.3",
-    "vitest": "^2.1.8"
+    "vitest": "^2.1.8",
+    "soksak-plugin-doctor": "github:soksak-ai/soksak-plugin-doctor"
   }
 }
