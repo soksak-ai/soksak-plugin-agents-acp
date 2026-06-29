@@ -13637,8 +13637,9 @@ function resolveAgent(opts, _pluginDir, npmBinDir) {
 var npmBinDirCache;
 async function resolveNpmBinDir(app) {
   if (npmBinDirCache !== void 0) return npmBinDirCache;
+  const win = typeof navigator !== "undefined" && /win/i.test(navigator.platform || navigator.userAgent || "");
   try {
-    const handle = await app.process.spawn("npm", ["prefix", "-g"], {});
+    const handle = win ? await app.process.spawn("npm", ["prefix", "-g"], {}) : await app.process.spawn("/bin/sh", ["-lc", "npm prefix -g"], {});
     const dec = new TextDecoder();
     let out = "";
     app.process.onData(handle, (b) => {
@@ -13646,7 +13647,6 @@ async function resolveNpmBinDir(app) {
     });
     await new Promise((res) => app.process.onExit(handle, () => res()));
     const prefix = out.trim().split(/\r?\n/).pop()?.trim() || "";
-    const win = typeof navigator !== "undefined" && /win/i.test(navigator.platform || navigator.userAgent || "");
     npmBinDirCache = prefix ? win ? prefix : `${prefix}/bin` : null;
   } catch {
     npmBinDirCache = null;
@@ -13702,10 +13702,18 @@ function createAcpEngine(app, pluginDir) {
     if (!app.process) throw new Error("process capability \uC5C6\uC74C(\uAD8C\uD55C \uBBF8\uC120\uC5B8?)");
     const npmBinDir = await resolveNpmBinDir(app);
     const launch = resolveAgent(opts, pluginDir, npmBinDir ?? void 0);
-    const handle = await app.process.spawn(launch.cmd, launch.args, {
+    const isWin = typeof navigator !== "undefined" && /win/i.test(navigator.platform || navigator.userAgent || "");
+    const handle = isWin ? await app.process.spawn(launch.cmd, launch.args, {
       cwd: launch.cwd,
       envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
-    });
+    }) : await app.process.spawn(
+      "/bin/sh",
+      ["-lc", 'exec "$0" "$@"', launch.cmd, ...launch.args],
+      {
+        cwd: launch.cwd,
+        envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
+      }
+    );
     const id = nextId++;
     const collectors = /* @__PURE__ */ new Map();
     const rec = {
