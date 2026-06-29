@@ -51,8 +51,17 @@ export function resolveAgent(
 let npmBinDirCache: string | null | undefined;
 export async function resolveNpmBinDir(app: any): Promise<string | null> {
   if (npmBinDirCache !== undefined) return npmBinDirCache;
+  const win =
+    typeof navigator !== "undefined" &&
+    /win/i.test(navigator.platform || navigator.userAgent || "");
   try {
-    const handle = await app.process.spawn("npm", ["prefix", "-g"], {});
+    // GUI 앱(Finder/dock 실행, 예: debug 번들)은 셸 PATH 를 미상속한다 → "npm" 직접 spawn 이
+    // ENOENT 로 실패하고(dev=터미널 실행은 PATH 상속돼 됐던 것), 절대경로 미해소 → npx 폴백마저
+    // PATH 부재로 "No such file or directory". posix 는 로그인 셸(/bin/sh -lc)로 돌려
+    // 프로파일/path_helper 의 PATH 를 살린다(코어 npm_global_dirs runtime_dep.rs 와 동일 기법).
+    const handle = win
+      ? await app.process.spawn("npm", ["prefix", "-g"], {})
+      : await app.process.spawn("/bin/sh", ["-lc", "npm prefix -g"], {});
     const dec = new TextDecoder();
     let out = "";
     app.process.onData(handle, (b: Uint8Array) => {
@@ -60,9 +69,6 @@ export async function resolveNpmBinDir(app: any): Promise<string | null> {
     });
     await new Promise<void>((res) => app.process.onExit(handle, () => res()));
     const prefix = out.trim().split(/\r?\n/).pop()?.trim() || "";
-    const win =
-      typeof navigator !== "undefined" &&
-      /win/i.test(navigator.platform || navigator.userAgent || "");
     npmBinDirCache = prefix ? (win ? prefix : `${prefix}/bin`) : null;
   } catch {
     npmBinDirCache = null;
@@ -161,10 +167,27 @@ export function createAcpEngine(app: any, pluginDir: string) {
     // ACP 자식 에이전트 = 에디터가 띄운 독립 세션. 호스트의 Claude Code 중첩 가드(CLAUDECODE 등)를
     // 떼어내 claude 어댑터가 "nested session" 으로 오인해 막히지 않게 한다(soksak 을 Claude Code 안에서
     // 띄운 경우 대비). 타 에이전트(gemini/codex/…)엔 무해 — 해당 키를 안 쓰므로.
-    const handle = await app.process.spawn(launch.cmd, launch.args, {
-      cwd: launch.cwd,
-      envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"],
-    });
+    // GUI 앱(Finder/dock — debug 번들)은 셸 PATH 미상속이라, 어댑터를 직접 spawn 하면 그 자체는
+    // 절대경로로 떠도 어댑터의 `#!/usr/bin/env node` shebang 이 node 를 PATH 에서 못 찾아
+    // "env: node: No such file or directory" 로 죽는다. posix 는 로그인 셸로 감싸 full PATH(node 포함)를
+    // 살린 뒤 exec 로 어댑터로 치환한다('exec "$0" "$@"' = 인용 없이 위치인자 전달, exec 라 stdio 파이프
+    // 유지·셸 프로세스 잔류 0). win 은 /bin/sh 부재라 직접 spawn(보통 GUI PATH 에 node 존재).
+    const isWin =
+      typeof navigator !== "undefined" &&
+      /win/i.test(navigator.platform || navigator.userAgent || "");
+    const handle = isWin
+      ? await app.process.spawn(launch.cmd, launch.args, {
+          cwd: launch.cwd,
+          envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"],
+        })
+      : await app.process.spawn(
+          "/bin/sh",
+          ["-lc", 'exec "$0" "$@"', launch.cmd, ...launch.args],
+          {
+            cwd: launch.cwd,
+            envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"],
+          },
+        );
     const id = nextId++;
     const collectors = new Map<string, any[]>();
     const rec: Conn = {
