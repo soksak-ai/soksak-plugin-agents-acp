@@ -13708,7 +13708,12 @@ function createAcpEngine(app, pluginDir) {
       envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
     }) : await app.process.spawn(
       "/bin/sh",
-      ["-lc", 'exec "$0" "$@"', launch.cmd, ...launch.args],
+      [
+        "-lc",
+        '[ -x /opt/homebrew/bin/node ] && PATH="/opt/homebrew/bin:$PATH"; exec "$0" "$@"',
+        launch.cmd,
+        ...launch.args
+      ],
       {
         cwd: launch.cwd,
         envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"]
@@ -13912,6 +13917,11 @@ ${reason}` : String(e));
 }
 
 // src/main.ts
+function fmtErr(e) {
+  const base = String(e);
+  const d = e?.data?.details ?? e?.details ?? e?.cause?.data?.details;
+  return d && !base.includes(String(d)) ? `${base}: ${d}` : base;
+}
 var main_default = {
   activate(ctx) {
     const app = ctx.app;
@@ -13998,7 +14008,7 @@ var main_default = {
         try {
           return { ok: true, ...await engine.connect(p) };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       }
     );
@@ -14015,7 +14025,7 @@ var main_default = {
         try {
           return { ok: true, ...await engine.sessionNew(p.connId, p.cwd, p.model) };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       }
     );
@@ -14036,7 +14046,7 @@ var main_default = {
             ...await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })
           };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       }
     );
@@ -14050,7 +14060,7 @@ var main_default = {
           await engine.cancel(p.connId, p.sessionId);
           return { ok: true };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       }
     );

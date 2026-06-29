@@ -170,8 +170,12 @@ export function createAcpEngine(app: any, pluginDir: string) {
     // GUI 앱(Finder/dock — debug 번들)은 셸 PATH 미상속이라, 어댑터를 직접 spawn 하면 그 자체는
     // 절대경로로 떠도 어댑터의 `#!/usr/bin/env node` shebang 이 node 를 PATH 에서 못 찾아
     // "env: node: No such file or directory" 로 죽는다. posix 는 로그인 셸로 감싸 full PATH(node 포함)를
-    // 살린 뒤 exec 로 어댑터로 치환한다('exec "$0" "$@"' = 인용 없이 위치인자 전달, exec 라 stdio 파이프
-    // 유지·셸 프로세스 잔류 0). win 은 /bin/sh 부재라 직접 spawn(보통 GUI PATH 에 node 존재).
+    // 살린 뒤 exec 로 어댑터로 치환한다. 추가로 Apple Silicon 표준 arm64 homebrew bin(/opt/homebrew/bin)
+    // 에 node 가 있으면 그걸 PATH 맨앞에 둔다 — 듀얼 homebrew 환경에서 path_helper 가 x64 node
+    // (/usr/local/bin)를 먼저 집으면 어댑터가 x64 로 떠 claude-agent-sdk 가 arm64 네이티브만 설치된
+    // 경우 "Claude native binary not found for darwin-x64" 로 죽는다(app 도 arm64라 arm64 node 가 정합).
+    // /opt/homebrew/bin/node 존재 ⟹ arm64 맥(Intel 은 /usr/local) → 안전한 휴리스틱. exec 라 stdio
+    // 파이프 유지·셸 잔류 0. win 은 /bin/sh 부재라 직접 spawn(보통 GUI PATH 에 node 존재).
     const isWin =
       typeof navigator !== "undefined" &&
       /win/i.test(navigator.platform || navigator.userAgent || "");
@@ -182,7 +186,12 @@ export function createAcpEngine(app: any, pluginDir: string) {
         })
       : await app.process.spawn(
           "/bin/sh",
-          ["-lc", 'exec "$0" "$@"', launch.cmd, ...launch.args],
+          [
+            "-lc",
+            '[ -x /opt/homebrew/bin/node ] && PATH="/opt/homebrew/bin:$PATH"; exec "$0" "$@"',
+            launch.cmd,
+            ...launch.args,
+          ],
           {
             cwd: launch.cwd,
             envRemove: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SSE_PORT"],
