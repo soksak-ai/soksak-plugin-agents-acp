@@ -12,6 +12,14 @@
 
 import { createAcpEngine } from "./acp/engine";
 
+// ACP/JSON-RPC 에러는 message 에 모호한 "Internal error" 만 두고 진짜 원인은 data.details 에 싣는다
+// (예: claude-agent-acp 의 "Invalid permissions.defaultMode: X"). details 를 표면화해 진단 가능하게.
+function fmtErr(e: any): string {
+  const base = String(e);
+  const d = e?.data?.details ?? e?.details ?? e?.cause?.data?.details;
+  return d && !base.includes(String(d)) ? `${base}: ${d}` : base;
+}
+
 export default {
   activate(ctx: any) {
     const app = ctx.app;
@@ -114,7 +122,7 @@ export default {
         try {
           return { ok: true, ...(await engine.connect(p)) };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       },
     );
@@ -131,7 +139,7 @@ export default {
         try {
           return { ok: true, ...(await engine.sessionNew(p.connId, p.cwd, p.model)) };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       },
     );
@@ -152,7 +160,7 @@ export default {
             ...(await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })),
           };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       },
     );
@@ -166,7 +174,7 @@ export default {
           await engine.cancel(p.connId, p.sessionId);
           return { ok: true };
         } catch (e) {
-          return { ok: false, error: String(e) };
+          return { ok: false, error: fmtErr(e) };
         }
       },
     );
