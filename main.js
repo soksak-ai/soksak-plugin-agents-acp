@@ -13931,6 +13931,7 @@ var main_default = {
       app.commands.register("ping", {
         description: "Check that the ACP core plugin is loaded and return its version. Use for E2E health checks.",
         triggers: { ko: "ACP \uCF54\uC5B4 \uC801\uC7AC \uBC84\uC804 \uD655\uC778" },
+        message: (d) => `ACP \uCF54\uC5B4 v${d.version}\uAC00 \uC801\uC7AC\uB418\uC5C8\uC2B5\uB2C8\uB2E4.`,
         handler: async () => ({
           ok: true,
           plugin: "soksak-plugin-agents-acp",
@@ -13943,6 +13944,7 @@ var main_default = {
       app.commands.register("exec", {
         description: "Spawn an external program, send optional stdin, and collect stdout/stderr/exitCode. Primitive over the process capability. Use for arbitrary CLI integration or as a base for ACP agent launchers.",
         triggers: { ko: "\uC678\uBD80 \uD504\uB85C\uADF8\uB7A8 \uC2E4\uD589 stdin stdout \uC218\uC9D1" },
+        message: (d) => `\uC885\uB8CC \uCF54\uB4DC ${d.exitCode}\uB85C \uC2E4\uD589\uC744 \uB9C8\uCCE4\uC2B5\uB2C8\uB2E4.`,
         params: {
           cmd: { type: "string", required: true, description: "Program to execute" },
           args: { type: "json", description: "Argument array (string[])" },
@@ -13952,7 +13954,7 @@ var main_default = {
         },
         handler: async (p) => {
           const proc = app.process;
-          if (!proc) return { ok: false, error: "process capability \uC5C6\uC74C(\uAD8C\uD55C \uBBF8\uC120\uC5B8?)" };
+          if (!proc) return { ok: false, code: "NO_CAPABILITY", message: "process capability \uC5C6\uC74C(\uAD8C\uD55C \uBBF8\uC120\uC5B8?)" };
           const args = Array.isArray(p.args) ? p.args : [];
           const waitMs = typeof p.waitMs === "number" ? p.waitMs : 2e3;
           const dec = new TextDecoder();
@@ -13962,7 +13964,7 @@ var main_default = {
           try {
             handle = await proc.spawn(p.cmd, args, { cwd: p.cwd });
           } catch (e) {
-            return { ok: false, error: `spawn \uC2E4\uD328: ${String(e)}` };
+            return { ok: false, code: "SPAWN_FAILED", message: `spawn \uC2E4\uD328: ${String(e)}` };
           }
           proc.onData(handle, (b) => {
             out += dec.decode(b, { stream: true });
@@ -13989,7 +13991,7 @@ var main_default = {
       })
     );
     const engine = createAcpEngine(app, ctx.dir);
-    const addAcp = (name, description, triggers, params, handler) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler }));
+    const addAcp = (name, description, triggers, params, handler, message) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler, message }));
     addAcp(
       "connect",
       "Spawn an ACP agent process and complete the initialize handshake. Returns connId. Supply an agent preset (gemini/claude/codex) or an explicit cmd.",
@@ -14008,9 +14010,10 @@ var main_default = {
         try {
           return { ok: true, ...await engine.connect(p) };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
-      }
+      },
+      (d) => `\uC5D0\uC774\uC804\uD2B8\uC5D0 \uC5F0\uACB0\uD588\uC2B5\uB2C8\uB2E4 (\uC5F0\uACB0 ${d.connId}).`
     );
     addAcp(
       "session-new",
@@ -14025,9 +14028,10 @@ var main_default = {
         try {
           return { ok: true, ...await engine.sessionNew(p.connId, p.cwd, p.model) };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
-      }
+      },
+      (d) => `\uC138\uC158\uC744 \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4 (${d.sessionId}).`
     );
     addAcp(
       "prompt",
@@ -14046,9 +14050,10 @@ var main_default = {
             ...await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })
           };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
-      }
+      },
+      (d) => `\uD134\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4 (${d.stopReason}).`
     );
     addAcp(
       "cancel",
@@ -14060,9 +14065,10 @@ var main_default = {
           await engine.cancel(p.connId, p.sessionId);
           return { ok: true };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
-      }
+      },
+      () => "\uD134\uC744 \uCDE8\uC18C\uD588\uC2B5\uB2C8\uB2E4."
     );
     addAcp(
       "disconnect",
@@ -14072,12 +14078,17 @@ var main_default = {
       async (p) => {
         await engine.disconnect(p.connId);
         return { ok: true };
-      }
+      },
+      () => "\uC5F0\uACB0\uC744 \uC885\uB8CC\uD588\uC2B5\uB2C8\uB2E4."
     );
-    addAcp("connections", "List all active ACP connections.", { ko: "\uD65C\uC131 ACP \uC5F0\uACB0 \uBAA9\uB85D \uC870\uD68C" }, {}, async () => ({
-      ok: true,
-      connections: engine.list()
-    }));
+    addAcp(
+      "connections",
+      "List all active ACP connections.",
+      { ko: "\uD65C\uC131 ACP \uC5F0\uACB0 \uBAA9\uB85D \uC870\uD68C" },
+      {},
+      async () => ({ ok: true, connections: engine.list() }),
+      (d) => `\uD65C\uC131 \uC5F0\uACB0 ${(d.connections ?? []).length}\uAC1C.`
+    );
   },
   deactivate() {
   }

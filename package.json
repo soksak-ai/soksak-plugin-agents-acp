@@ -10,7 +10,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "doctor": "soksak-plugin-doctor",
-    "prepublishOnly": "npm run doctor"
+    "prepublishOnly": "npm run build && npm run doctor"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.26.0"
