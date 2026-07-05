@@ -30,6 +30,7 @@ export default {
       app.commands.register("ping", {
         description: "Check that the ACP core plugin is loaded and return its version. Use for E2E health checks.",
         triggers: { ko: "ACP 코어 적재 버전 확인" },
+        message: (d: any) => `ACP 코어 v${d.version}가 적재되었습니다.`,
         handler: async () => ({
           ok: true,
           plugin: "soksak-plugin-agents-acp",
@@ -47,6 +48,7 @@ export default {
         description:
           "Spawn an external program, send optional stdin, and collect stdout/stderr/exitCode. Primitive over the process capability. Use for arbitrary CLI integration or as a base for ACP agent launchers.",
         triggers: { ko: "외부 프로그램 실행 stdin stdout 수집" },
+        message: (d: any) => `종료 코드 ${d.exitCode}로 실행을 마쳤습니다.`,
         params: {
           cmd: { type: "string", required: true, description: "Program to execute" },
           args: { type: "json", description: "Argument array (string[])" },
@@ -56,7 +58,7 @@ export default {
         },
         handler: async (p: any) => {
           const proc = app.process;
-          if (!proc) return { ok: false, error: "process capability 없음(권한 미선언?)" };
+          if (!proc) return { ok: false, code: "NO_CAPABILITY", message: "process capability 없음(권한 미선언?)" };
           const args: string[] = Array.isArray(p.args) ? p.args : [];
           const waitMs: number = typeof p.waitMs === "number" ? p.waitMs : 2000;
           const dec = new TextDecoder();
@@ -66,7 +68,7 @@ export default {
           try {
             handle = await proc.spawn(p.cmd, args, { cwd: p.cwd });
           } catch (e) {
-            return { ok: false, error: `spawn 실패: ${String(e)}` };
+            return { ok: false, code: "SPAWN_FAILED", message: `spawn 실패: ${String(e)}` };
           }
           proc.onData(handle, (b: Uint8Array) => {
             out += dec.decode(b, { stream: true });
@@ -102,7 +104,8 @@ export default {
       triggers: { ko: string },
       params: any,
       handler: (p: any) => Promise<any>,
-    ) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler }));
+      message: (d: any) => string,
+    ) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler, message }));
 
     addAcp(
       "connect",
@@ -122,9 +125,10 @@ export default {
         try {
           return { ok: true, ...(await engine.connect(p)) };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
+      (d: any) => `에이전트에 연결했습니다 (연결 ${d.connId}).`,
     );
     addAcp(
       "session-new",
@@ -139,9 +143,10 @@ export default {
         try {
           return { ok: true, ...(await engine.sessionNew(p.connId, p.cwd, p.model)) };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
+      (d: any) => `세션을 생성했습니다 (${d.sessionId}).`,
     );
     addAcp(
       "prompt",
@@ -160,9 +165,10 @@ export default {
             ...(await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })),
           };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
+      (d: any) => `턴이 완료되었습니다 (${d.stopReason}).`,
     );
     addAcp(
       "cancel",
@@ -174,9 +180,10 @@ export default {
           await engine.cancel(p.connId, p.sessionId);
           return { ok: true };
         } catch (e) {
-          return { ok: false, error: fmtErr(e) };
+          return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
+      () => "턴을 취소했습니다.",
     );
     addAcp(
       "disconnect",
@@ -187,11 +194,16 @@ export default {
         await engine.disconnect(p.connId);
         return { ok: true };
       },
+      () => "연결을 종료했습니다.",
     );
-    addAcp("connections", "List all active ACP connections.", { ko: "활성 ACP 연결 목록 조회" }, {}, async () => ({
-      ok: true,
-      connections: engine.list(),
-    }));
+    addAcp(
+      "connections",
+      "List all active ACP connections.",
+      { ko: "활성 ACP 연결 목록 조회" },
+      {},
+      async () => ({ ok: true, connections: engine.list() }),
+      (d: any) => `활성 연결 ${(d.connections ?? []).length}개.`,
+    );
   },
   deactivate() {},
 };
