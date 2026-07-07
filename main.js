@@ -13991,7 +13991,9 @@ var main_default = {
       })
     );
     const engine = createAcpEngine(app, ctx.dir);
-    const addAcp = (name, description, triggers, params, handler, message) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler, message }));
+    const addAcp = (name, description, triggers, params, handler, message, hint) => ctx.subscriptions.push(
+      app.commands.register(name, { description, triggers, params, handler, message, ...hint ? { hint } : {} })
+    );
     addAcp(
       "connect",
       "Spawn an ACP agent process and complete the initialize handshake. Returns connId. Supply an agent preset (gemini/claude/codex) or an explicit cmd.",
@@ -14013,7 +14015,13 @@ var main_default = {
           return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
-      (d) => `\uC5D0\uC774\uC804\uD2B8\uC5D0 \uC5F0\uACB0\uD588\uC2B5\uB2C8\uB2E4 (\uC5F0\uACB0 ${d.connId}).`
+      (d) => `\uC5D0\uC774\uC804\uD2B8\uC5D0 \uC5F0\uACB0\uD588\uC2B5\uB2C8\uB2E4 (\uC5F0\uACB0 ${d.connId}).`,
+      (d) => d.code ? [] : [
+        {
+          cmd: `sok plugin.soksak-plugin-agents-acp.session-new {"connId":${d.connId}}`,
+          why: "\uC774 \uC5F0\uACB0\uB85C \uC138\uC158\uC744 \uB9CC\uB4E4 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        }
+      ]
     );
     addAcp(
       "session-new",
@@ -14026,12 +14034,18 @@ var main_default = {
       },
       async (p) => {
         try {
-          return { ok: true, ...await engine.sessionNew(p.connId, p.cwd, p.model) };
+          return { ok: true, connId: p.connId, ...await engine.sessionNew(p.connId, p.cwd, p.model) };
         } catch (e) {
           return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
-      (d) => `\uC138\uC158\uC744 \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4 (${d.sessionId}).`
+      (d) => `\uC138\uC158\uC744 \uC0DD\uC131\uD588\uC2B5\uB2C8\uB2E4 (${d.sessionId}).`,
+      (d) => d.code ? [] : [
+        {
+          cmd: `sok plugin.soksak-plugin-agents-acp.prompt {"connId":${d.connId},"sessionId":"${d.sessionId}","text":"..."}`,
+          why: "\uC774 \uC138\uC158\uC5D0 \uD504\uB86C\uD504\uD2B8\uB97C \uBCF4\uB0BC \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        }
+      ]
     );
     addAcp(
       "prompt",
@@ -14047,13 +14061,25 @@ var main_default = {
         try {
           return {
             ok: true,
+            connId: p.connId,
+            sessionId: p.sessionId,
             ...await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })
           };
         } catch (e) {
           return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
-      (d) => `\uD134\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4 (${d.stopReason}).`
+      (d) => `\uD134\uC774 \uC644\uB8CC\uB418\uC5C8\uC2B5\uB2C8\uB2E4 (${d.stopReason}).`,
+      (d) => d.code ? [] : [
+        {
+          cmd: `sok plugin.soksak-plugin-agents-acp.prompt {"connId":${d.connId},"sessionId":"${d.sessionId}","text":"..."}`,
+          why: "\uAC19\uC740 \uC138\uC158\uC5D0 \uC774\uC5B4\uC11C \uD504\uB86C\uD504\uD2B8\uB97C \uBCF4\uB0BC \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        },
+        {
+          cmd: `sok plugin.soksak-plugin-agents-acp.disconnect {"connId":${d.connId}}`,
+          why: "\uB354 \uC4F8 \uC77C\uC774 \uC5C6\uC73C\uBA74 \uC5F0\uACB0\uC744 \uC885\uB8CC\uD560 \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        }
+      ]
     );
     addAcp(
       "cancel",
@@ -14063,12 +14089,18 @@ var main_default = {
       async (p) => {
         try {
           await engine.cancel(p.connId, p.sessionId);
-          return { ok: true };
+          return { ok: true, connId: p.connId, sessionId: p.sessionId };
         } catch (e) {
           return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
-      () => "\uD134\uC744 \uCDE8\uC18C\uD588\uC2B5\uB2C8\uB2E4."
+      () => "\uD134\uC744 \uCDE8\uC18C\uD588\uC2B5\uB2C8\uB2E4.",
+      (d) => d.code ? [] : [
+        {
+          cmd: `sok plugin.soksak-plugin-agents-acp.prompt {"connId":${d.connId},"sessionId":"${d.sessionId}","text":"..."}`,
+          why: "\uCDE8\uC18C\uD55C \uC138\uC158\uC5D0 \uC0C8 \uD504\uB86C\uD504\uD2B8\uB97C \uBCF4\uB0BC \uC218 \uC788\uC2B5\uB2C8\uB2E4."
+        }
+      ]
     );
     addAcp(
       "disconnect",
@@ -14077,7 +14109,7 @@ var main_default = {
       { connId: { type: "number", required: true } },
       async (p) => {
         await engine.disconnect(p.connId);
-        return { ok: true };
+        return { ok: true, connId: p.connId };
       },
       () => "\uC5F0\uACB0\uC744 \uC885\uB8CC\uD588\uC2B5\uB2C8\uB2E4."
     );

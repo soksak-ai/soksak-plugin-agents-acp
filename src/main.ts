@@ -105,7 +105,11 @@ export default {
       params: any,
       handler: (p: any) => Promise<any>,
       message: (d: any) => string,
-    ) => ctx.subscriptions.push(app.commands.register(name, { description, triggers, params, handler, message }));
+      hint?: (d: any) => { cmd: string; why: string }[],
+    ) =>
+      ctx.subscriptions.push(
+        app.commands.register(name, { description, triggers, params, handler, message, ...(hint ? { hint } : {}) }),
+      );
 
     addAcp(
       "connect",
@@ -129,6 +133,15 @@ export default {
         }
       },
       (d: any) => `에이전트에 연결했습니다 (연결 ${d.connId}).`,
+      (d: any) =>
+        d.code
+          ? []
+          : [
+              {
+                cmd: `sok plugin.soksak-plugin-agents-acp.session-new {"connId":${d.connId}}`,
+                why: "이 연결로 세션을 만들 수 있습니다.",
+              },
+            ],
     );
     addAcp(
       "session-new",
@@ -141,12 +154,21 @@ export default {
       },
       async (p) => {
         try {
-          return { ok: true, ...(await engine.sessionNew(p.connId, p.cwd, p.model)) };
+          return { ok: true, connId: p.connId, ...(await engine.sessionNew(p.connId, p.cwd, p.model)) };
         } catch (e) {
           return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
       (d: any) => `세션을 생성했습니다 (${d.sessionId}).`,
+      (d: any) =>
+        d.code
+          ? []
+          : [
+              {
+                cmd: `sok plugin.soksak-plugin-agents-acp.prompt {"connId":${d.connId},"sessionId":"${d.sessionId}","text":"..."}`,
+                why: "이 세션에 프롬프트를 보낼 수 있습니다.",
+              },
+            ],
     );
     addAcp(
       "prompt",
@@ -162,6 +184,8 @@ export default {
         try {
           return {
             ok: true,
+            connId: p.connId,
+            sessionId: p.sessionId,
             ...(await engine.prompt(p.connId, p.sessionId, p.text, { timeoutMs: p.timeoutMs })),
           };
         } catch (e) {
@@ -169,6 +193,19 @@ export default {
         }
       },
       (d: any) => `턴이 완료되었습니다 (${d.stopReason}).`,
+      (d: any) =>
+        d.code
+          ? []
+          : [
+              {
+                cmd: `sok plugin.soksak-plugin-agents-acp.prompt {"connId":${d.connId},"sessionId":"${d.sessionId}","text":"..."}`,
+                why: "같은 세션에 이어서 프롬프트를 보낼 수 있습니다.",
+              },
+              {
+                cmd: `sok plugin.soksak-plugin-agents-acp.disconnect {"connId":${d.connId}}`,
+                why: "더 쓸 일이 없으면 연결을 종료할 수 있습니다.",
+              },
+            ],
     );
     addAcp(
       "cancel",
@@ -178,12 +215,21 @@ export default {
       async (p) => {
         try {
           await engine.cancel(p.connId, p.sessionId);
-          return { ok: true };
+          return { ok: true, connId: p.connId, sessionId: p.sessionId };
         } catch (e) {
           return { ok: false, code: "INTERNAL", message: fmtErr(e) };
         }
       },
       () => "턴을 취소했습니다.",
+      (d: any) =>
+        d.code
+          ? []
+          : [
+              {
+                cmd: `sok plugin.soksak-plugin-agents-acp.prompt {"connId":${d.connId},"sessionId":"${d.sessionId}","text":"..."}`,
+                why: "취소한 세션에 새 프롬프트를 보낼 수 있습니다.",
+              },
+            ],
     );
     addAcp(
       "disconnect",
@@ -192,7 +238,7 @@ export default {
       { connId: { type: "number", required: true } },
       async (p) => {
         await engine.disconnect(p.connId);
-        return { ok: true };
+        return { ok: true, connId: p.connId };
       },
       () => "연결을 종료했습니다.",
     );
