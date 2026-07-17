@@ -9,3 +9,5 @@ dist
 
 # local-only working notes (never committed)
 secret/
+dist/
+node_modules/
