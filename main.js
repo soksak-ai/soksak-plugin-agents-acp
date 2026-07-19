@@ -13935,7 +13935,7 @@ var main_default = {
         handler: async () => ({
           ok: true,
           plugin: "soksak-plugin-agents-acp",
-          version: "0.0.1",
+          version: "0.0.2",
           phase: "M0"
         })
       })

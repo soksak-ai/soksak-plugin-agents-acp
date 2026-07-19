@@ -1,9 +1,9 @@
 {
   "name": "soksak-plugin-agents-acp",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
-  "description": "AI \ucf54\ub529 \uc5d0\uc774\uc804\ud2b8(ACP)\ub97c \ub2e4\ub8e8\ub294 soksak \ub77c\uc774\ube0c\ub7ec\ub9ac \ud50c\ub7ec\uadf8\uc778 \u2014 \uc5d0\uc774\uc804\ud2b8\ub97c \uc11c\ube0c\ud504\ub85c\uc138\uc2a4\ub85c \uc2e4\ud589\ud558\uace0 \ud45c\uc900 \ud504\ub85c\ud1a0\ucf5c\ub85c \ud1b5\uc2e0\ud558\ub294 \uc5d4\uc9c4\uc744 \ucee4\ub9e8\ub4dc\u00b7\uc774\ubca4\ud2b8\ub85c \ub178\ucd9c.",
+  "description": "AI 코딩 에이전트(ACP)를 다루는 soksak 라이브러리 플러그인 — 에이전트를 서브프로세스로 실행하고 표준 프로토콜로 통신하는 엔진을 커맨드·이벤트로 노출.",
   "scripts": {
     "build": "node build.mjs",
     "dev": "node build.mjs --watch",
