@@ -12,6 +12,9 @@
 
 import { createAcpEngine } from "./acp/engine";
 
+// build.mjs 가 plugin.json.version 을 주입(버전 단일진실 — 하드코딩 드리프트 금지).
+declare const __PLUGIN_VERSION__: string;
+
 // ACP/JSON-RPC 에러는 message 에 모호한 "Internal error" 만 두고 진짜 원인은 data.details 에 싣는다
 // (예: claude-agent-acp 의 "Invalid permissions.defaultMode: X"). details 를 표면화해 진단 가능하게.
 function fmtErr(e: any): string {
@@ -34,7 +37,7 @@ export default {
         handler: async () => ({
           ok: true,
           plugin: "soksak-plugin-agents-acp",
-          version: "0.0.1",
+          version: __PLUGIN_VERSION__,
           phase: "M0",
         }),
       }),
